@@ -1,3 +1,7 @@
+
+const fs = require("fs");
+const path = require("path");
+
 const CATEGORIES = [
 	"📢 ANNONCE GÉNÉRALE",
 	"🚨 ANNONCE URGENTE",
@@ -7,72 +11,121 @@ const CATEGORIES = [
 ];
 
 const STYLES = [
-	"DARK 🖤",
-	"ATTENTION 🚨",
-	"BLOOD 🩸",
-	"CYBER 💠",
-	"ROYAL 👑",
-	"SOFT 🌙",
-	"MINIMALISTE ✦"
+	"🌑 DARK IMPERIAL",
+	"🚨 ROYAL ALERT",
+	"🩸 BLOOD DYNASTY",
+	"💠 CYBER EMPIRE",
+	"👑 ROYAL SHADOW",
+	"🌙 SOFT LUXURY",
+	"⚜️ IMPERIAL MINIMAL"
 ];
 
 const STYLE_DETAILS = [
 	{
-		title: "𓆩 🖤 DARK SYSTEM ANNOUNCEMENT 🖤 𓆪",
-		top: "╔═══════〔 🖤 〕═══════╗",
-		bottom: "╚═══════〔 🦇 〕═══════╝",
-		emojis: "🖤 🦇 ⛓️ 🌑 🥀",
-		side: "𓆩"
+		title: "𓆩 ☾ DARK IMPERIAL ☽ 𓆪",
+		top: "╔════════ ◈ ☾ ◈ ════════╗",
+		bottom: "╚════════ ◈ ☽ ◈ ════════╝",
+		emojis: "🌑 🖤 🦇 ⛓️ 🥀",
+		side: "𓆩",
+		heading: "『 DARK TRANSMISSION 』"
 	},
 	{
-		title: "🚨 URGENT ALERT 🚨",
+		title: "♛ IMPERIAL ALERT ♛",
 		top: "╔═══════〔 🚨 〕═══════╗",
-		bottom: "╚═══════〔 ⚠️ 〕═══════╝",
-		emojis: "🚨 ⚠️ 🔴 ❗ 📛",
-		side: "⚠️"
+		bottom: "╚═══════〔 ⚜️ 〕═══════╝",
+		emojis: "🚨 ⚠️ 🔔 ⚜️ ❗",
+		side: "♛",
+		heading: "『 OFFICIAL ALERT 』"
 	},
 	{
-		title: "𓆩 🩸 BLOOD ANNOUNCEMENT 🩸 𓆪",
+		title: "𓆩 🩸 BLOOD DYNASTY 🩸 𓆪",
 		top: "╔══════〔 🩸 ⛓️ 〕══════╗",
 		bottom: "╚══════〔 ⛓️ 🩸 〕══════╝",
-		emojis: "🩸 🥀 ⛓️ 🔥 🗡️",
-		side: "🩸"
+		emojis: "🩸 🥀 🔥 ⛓️",
+		side: "⛓️",
+		heading: "『 DYNASTY TRANSMISSION 』"
 	},
 	{
-		title: "『 💠 CYBER SYSTEM 💠 』",
-		top: "╔════【 ⚡ SYSTEM ⚡ 】════╗",
-		bottom: "╚════【 💠 END SYSTEM 💠 】╝",
+		title: "『 💠 CYBER EMPIRE 💠 』",
+		top: "╔══════【 ⚡ SYSTEM ⚡ 】══════╗",
+		bottom: "╚══════【 💠 END SYSTEM 💠 】╝",
 		emojis: "💠 ⚡ 🤖 🔷 💻",
-		side: "◆"
+		side: "◆",
+		heading: "『 SYSTEM NOTIFICATION 』"
 	},
 	{
-		title: "♛ ROYAL ANNOUNCEMENT ♛",
-		top: "╔═══════ 👑 ♛ 👑 ═══════╗",
-		bottom: "╚═══════ 👑 ♛ 👑 ═══════╝",
-		emojis: "👑 💎 🏰 ✨ ⚜️",
-		side: "♛"
+		title: "♛ ROYAL SHADOW IMPERIAL ♛",
+		top: "╔═══════ ◈ ♛ ◈ ═══════╗",
+		bottom: "╚═══════ ◈ ♛ ◈ ═══════╝",
+		emojis: "👑 💎 🏰 ⚜️ 🌑",
+		side: "♛",
+		heading: "『 THE IMPERIAL DECREE 』"
 	},
 	{
-		title: "˚₊‧ SOFT MESSAGE ‧₊˚",
-		top: "╔══════ 🌙 ✨ 🌸 ══════╗",
-		bottom: "╚══════ 🌸 ✨ 🌙 ══════╝",
-		emojis: "🌙 ✨ 🌸 🕊️ 💗",
-		side: "✧"
+		title: "˚₊‧ 🌙 SOFT LUXURY ‧₊˚",
+		top: "╔══════ ✧ 🌙 ✧ ══════╗",
+		bottom: "╚══════ ✧ 🌸 ✧ ══════╝",
+		emojis: "🌙 ✨ 🌸 🕊️ 💎",
+		side: "✧",
+		heading: "『 ELEGANT MESSAGE 』"
 	},
 	{
-		title: "✦ ANNOUNCEMENT ✦",
+		title: "⚜️ IMPERIAL MINIMAL ⚜️",
 		top: "╔══════════════════════╗",
 		bottom: "╚══════════════════════╝",
-		emojis: "✦ • ◈ ◆ ✧",
-		side: "•"
+		emojis: "⚜️ ◈ ✦ ◆",
+		side: "✦",
+		heading: "『 OFFICIAL NOTICE 』"
 	}
 ];
 
 const CONCURRENCY = 5;
-const SEND_TIMEOUT = 10000;
-const BATCH_DELAY = 400;
+const SEND_TIMEOUT = 15000;
+const BATCH_DELAY = 500;
+const MAX_HISTORY = 30;
+
+const STORE_FILE = path.join(__dirname, "announcements.json");
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/* =========================================
+   STOCKAGE DES ANNONCES
+========================================= */
+
+function loadStore() {
+	try {
+		if (!fs.existsSync(STORE_FILE))
+			return [];
+
+		const data = JSON.parse(fs.readFileSync(STORE_FILE, "utf8"));
+
+		return Array.isArray(data) ? data : [];
+	}
+	catch (err) {
+		console.error("[ANNONCE] Erreur de lecture :", err);
+		return [];
+	}
+}
+
+function saveStore(records) {
+	const temporaryFile = STORE_FILE + ".tmp";
+
+	fs.writeFileSync(
+		temporaryFile,
+		JSON.stringify(records, null, 2),
+		"utf8"
+	);
+
+	fs.renameSync(temporaryFile, STORE_FILE);
+}
+
+function createAnnouncementID() {
+	return `ANN-${Date.now()}`;
+}
+
+/* =========================================
+   DESIGN DES ANNONCES
+========================================= */
 
 function formatAnnouncement(category, style, content) {
 	const details = STYLE_DETAILS[style];
@@ -80,32 +133,44 @@ function formatAnnouncement(category, style, content) {
 	return [
 		details.top,
 		"",
-		details.title,
+		`       ${details.title}`,
 		"",
-		`╭─────── ${details.side} ───────╮`,
-		`📌 ${category}`,
-		"╰────────────────────────╯",
+		`      ${details.heading}`,
+		"",
+		"╭━━━━━━━━━━━━━━━━━━━━━━╮",
+		`   ${details.side}  ${category}`,
+		"╰━━━━━━━━━━━━━━━━━━━━━━╯",
 		"",
 		"┏━━━━━━━━━━━━━━━━━━━━━━┓",
 		"       📜 MESSAGE OFFICIEL",
 		"┗━━━━━━━━━━━━━━━━━━━━━━┛",
 		"",
+		"✦ ─────── ✧ ─────── ✦",
+		"",
 		content.trim(),
 		"",
-		"━━━━━━━━━━━━━━━━━━━━━━",
+		"✦ ─────── ✧ ─────── ✦",
+		"",
+		"━━━━━━━━━━━━━━━━━━━━━━━━",
 		`       ${details.emojis}`,
 		"",
-		"✦ FIN DE L'ANNONCE ✦",
+		"♛ TRANSMIS PAR L'ADMINISTRATION ♛",
+		"",
+		"『 END OF TRANSMISSION 』",
 		"",
 		details.bottom
 	].join("\n");
 }
 
+/* =========================================
+   MENUS ET RÉPONSES
+========================================= */
+
 async function createReply(message, state) {
 	const sent = await message.reply(state.text);
 
 	if (!sent || !sent.messageID)
-		throw new Error("Impossible de créer le menu de réponse.");
+		throw new Error("Impossible de créer le menu.");
 
 	global.GoatBot.onReply.set(sent.messageID, {
 		commandName: "annonce",
@@ -113,18 +178,41 @@ async function createReply(message, state) {
 	});
 }
 
+function mainMenu() {
+	return [
+		"╔════════ ◈ ♛ ◈ ════════╗",
+		"       ROYAL SHADOW",
+		"       IMPERIAL CENTER",
+		"╚════════ ◈ ♛ ◈ ════════╝",
+		"",
+		"『 CENTRE DE GESTION 』",
+		"",
+		"1️⃣ CRÉER UNE ANNONCE",
+		"",
+		"2️⃣ RETIRER UNE ANNONCE",
+		"",
+		"3️⃣ HISTORIQUE DES ANNONCES",
+		"",
+		"━━━━━━━━━━━━━━━━━━━━━━━━",
+		"Réponds avec 1, 2 ou 3."
+	].join("\n");
+}
+
+/* =========================================
+   ENVOI AVEC DÉLAI DE SÉCURITÉ
+========================================= */
+
 function sendWithTimeout(api, body, threadID) {
 	return new Promise((resolve, reject) => {
 		let finished = false;
 
 		const timer = setTimeout(() => {
-			if (finished) return;
-			finished = true;
-			reject(new Error("Délai d'envoi dépassé."));
+			finish(new Error("Délai d'envoi dépassé."));
 		}, SEND_TIMEOUT);
 
 		function finish(err, info) {
 			if (finished) return;
+
 			finished = true;
 			clearTimeout(timer);
 
@@ -141,8 +229,11 @@ function sendWithTimeout(api, body, threadID) {
 				finish
 			);
 
-			if (result && typeof result.then === "function")
-				result.then(info => finish(null, info)).catch(finish);
+			if (result && typeof result.then === "function") {
+				result.then(info => {
+					if (info) finish(null, info);
+				}).catch(finish);
+			}
 		}
 		catch (err) {
 			finish(err);
@@ -150,49 +241,181 @@ function sendWithTimeout(api, body, threadID) {
 	});
 }
 
+/* =========================================
+   SUPPRESSION AVEC DÉLAI DE SÉCURITÉ
+========================================= */
+
+function unsendWithTimeout(api, messageID) {
+	return new Promise((resolve, reject) => {
+		if (typeof api.unsendMessage !== "function") {
+			return reject(
+				new Error("La fonction unsendMessage n'est pas disponible.")
+			);
+		}
+
+		let finished = false;
+
+		const timer = setTimeout(() => {
+			finish(new Error("Délai de suppression dépassé."));
+		}, SEND_TIMEOUT);
+
+		function finish(err, result) {
+			if (finished) return;
+
+			finished = true;
+			clearTimeout(timer);
+
+			if (err)
+				return reject(err);
+
+			resolve(result);
+		}
+
+		try {
+			const result = api.unsendMessage(messageID, finish);
+
+			if (result && typeof result.then === "function") {
+				result.then(info => finish(null, info)).catch(finish);
+			}
+		}
+		catch (err) {
+			finish(err);
+		}
+	});
+}
+
+/* =========================================
+   HISTORIQUE
+========================================= */
+
+function getHistoryText(records) {
+	if (records.length === 0) {
+		return [
+			"╔═══════ 📜 ═══════╗",
+			"       HISTORIQUE",
+			"╚══════════════════╝",
+			"",
+			"⚠️ Aucune annonce enregistrée."
+		].join("\n");
+	}
+
+	const latest = records.slice(-10).reverse();
+
+	return [
+		"╔════════ ◈ ♛ ◈ ════════╗",
+		"       IMPERIAL ARCHIVE",
+		"╚════════ ◈ ♛ ◈ ════════╝",
+		"",
+		...latest.map((record, index) => {
+			const remaining = record.messages.length;
+
+			return [
+				`${index + 1}️⃣ ${record.category}`,
+				`   🆔 ${record.id}`,
+				`   📅 ${record.date}`,
+				`   📦 Messages enregistrés : ${record.sentCount}`,
+				`   🗑️ Messages retirés : ${record.removedCount}`,
+				`   📌 Messages restants : ${remaining}`,
+				`   📍 État : ${record.status}`,
+				""
+			].join("\n");
+		}),
+		"━━━━━━━━━━━━━━━━━━━━━━━━",
+		"✦ FIN DES ARCHIVES ✦"
+	].join("\n");
+}
+
+function getRemovableRecords(records) {
+	return records.filter(record =>
+		Array.isArray(record.messages) &&
+		record.messages.length > 0
+	).slice(-10).reverse();
+}
+
+function getRemovalMenu(records) {
+	const removable = getRemovableRecords(records);
+
+	if (removable.length === 0) {
+		return {
+			ids: [],
+			text: [
+				"╔══════ 🗑️ ══════╗",
+				"    CENTRE DE RETRAIT",
+				"╚════════════════╝",
+				"",
+				"⚠️ Aucune annonce enregistrée à retirer.",
+				"",
+				"Les nouvelles annonces seront enregistrées automatiquement."
+			].join("\n")
+		};
+	}
+
+	return {
+		ids: removable.map(record => record.id),
+		text: [
+			"╔════════ ◈ ♛ ◈ ════════╗",
+			"       IMPERIAL REMOVAL",
+			"╚════════ ◈ ♛ ◈ ════════╝",
+			"",
+			"📜 ANNONCES DISPONIBLES",
+			"",
+			...removable.map((record, index) => [
+				`${index + 1}️⃣ ${record.category}`,
+				`   📅 ${record.date}`,
+				`   📦 Groupes concernés : ${record.sentCount}`,
+				`   🗑️ Messages encore présents : ${record.messages.length}`,
+				""
+			].join("\n")),
+			"━━━━━━━━━━━━━━━━━━━━━━━━",
+			"Choisis le numéro de l'annonce à retirer."
+		].join("\n")
+	};
+}
+
+/* =========================================
+   CONFIGURATION DE LA COMMANDE
+========================================= */
+
 module.exports = {
 	config: {
 		name: "annonce",
-		version: "3.0.0",
+		version: "4.0.0",
 		author: "Kenny",
 		countDown: 10,
 		role: 4,
-		description: "Diffuser une annonce décorée dans tous les groupes",
+		description: "Centre impérial de création et gestion des annonces",
 		category: "owner",
 		guide: {
-			fr: "~annonce : ouvrir le menu de diffusion"
+			fr: "~annonce : ouvrir le centre impérial"
 		}
 	},
 
-	onStart: async function ({ event, message, role }) {
+	/* =====================================
+	   OUVERTURE DU MENU
+	===================================== */
+
+	onStart: async function ({ message, role, event }) {
 		if (role < 4)
 			return message.reply(
-				"⛔ Cette commande est réservée aux administrateurs du bot."
+				"⛔ Accès réservé aux administrateurs du bot."
 			);
 
 		const ownerID = event.senderID || event.author;
 
-		const text =
-			"╔════════════════════════════╗\n" +
-			"       🖤 CENTRE D'ANNONCES 🖤\n" +
-			"╚════════════════════════════╝\n\n" +
-			"📂 CHOISIS UNE CATÉGORIE\n\n" +
-			CATEGORIES.map((item, i) => `${i + 1}️⃣ ${item}`).join("\n") +
-			"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
-			"✉️ Réponds avec le numéro de ton choix.";
-
 		await createReply(message, {
 			ownerID,
-			step: "category",
-			text
+			step: "main",
+			text: mainMenu()
 		});
 	},
 
+	/* =====================================
+	   GESTION DES RÉPONSES
+	===================================== */
+
 	onReply: async function ({ api, event, message, Reply, role }) {
 		if (role < 4)
-			return message.reply(
-				"⛔ Tu n'as plus l'autorisation d'utiliser cette commande."
-			);
+			return message.reply("⛔ Autorisation insuffisante.");
 
 		const senderID = event.senderID || event.author;
 
@@ -209,21 +432,84 @@ module.exports = {
 			global.GoatBot.onReply.delete(replyID);
 
 		const next = async (state, text) => {
-			await createReply(message, {
+			return createReply(message, {
 				ownerID: Reply.ownerID,
 				...state,
 				text
 			});
 		};
 
-		// ÉTAPE 1 : CATÉGORIE
-		if (Reply.step === "category") {
-			if (!Number.isInteger(choice) || choice < 1 || choice > CATEGORIES.length) {
+		/* =================================
+		   MENU PRINCIPAL
+		================================= */
+
+		if (Reply.step === "main") {
+			if (![1, 2, 3].includes(choice)) {
+				return next(
+					{ step: "main" },
+					mainMenu() + "\n\n❌ Choix invalide."
+				);
+			}
+
+			// CRÉER UNE ANNONCE
+			if (choice === 1) {
 				return next(
 					{ step: "category" },
-					"❌ Numéro invalide.\n\n" +
-					CATEGORIES.map((item, i) => `${i + 1}️⃣ ${item}`).join("\n") +
-					"\n\nChoisis un numéro entre 1 et 5."
+					[
+						"╔══════ ⚜️ ══════╗",
+						"    CHOIX DE CATÉGORIE",
+						"╚════════════════╝",
+						"",
+						...CATEGORIES.map((item, i) =>
+							`${i + 1}️⃣ ${item}`
+						),
+						"",
+						"Réponds avec un numéro entre 1 et 5."
+					].join("\n")
+				);
+			}
+
+			// RETIRER UNE ANNONCE
+			if (choice === 2) {
+				const records = loadStore();
+				const menu = getRemovalMenu(records);
+
+				if (menu.ids.length === 0)
+					return message.reply(menu.text);
+
+				return next(
+					{
+						step: "removeList",
+						announcementIDs: menu.ids
+					},
+					menu.text
+				);
+			}
+
+			// HISTORIQUE
+			if (choice === 3) {
+				return message.reply(
+					getHistoryText(loadStore())
+				);
+			}
+		}
+
+		/* =================================
+		   CHOIX DE CATÉGORIE
+		================================= */
+
+		if (Reply.step === "category") {
+			if (
+				!Number.isInteger(choice) ||
+				choice < 1 ||
+				choice > CATEGORIES.length
+			) {
+				return next(
+					{ step: "category" },
+					"❌ Catégorie invalide.\n\n" +
+					CATEGORIES.map((item, i) =>
+						`${i + 1}️⃣ ${item}`
+					).join("\n")
 				);
 			}
 
@@ -232,25 +518,39 @@ module.exports = {
 					step: "style",
 					category: choice - 1
 				},
-				"╔══════ 🎨 ══════╗\n" +
-				"       CHOIX DU STYLE\n" +
-				"╚════════════════╝\n\n" +
-				STYLES.map((item, i) => `${i + 1}️⃣ ${item}`).join("\n") +
-				"\n\n✧ Réponds avec un numéro entre 1 et 7."
+				[
+					"╔══════ 👑 ══════╗",
+					"       STYLE IMPÉRIAL",
+					"╚════════════════╝",
+					"",
+					...STYLES.map((item, i) =>
+						`${i + 1}️⃣ ${item}`
+					),
+					"",
+					"Choisis un style entre 1 et 7."
+				].join("\n")
 			);
 		}
 
-		// ÉTAPE 2 : STYLE
+		/* =================================
+		   CHOIX DU STYLE
+		================================= */
+
 		if (Reply.step === "style") {
-			if (!Number.isInteger(choice) || choice < 1 || choice > STYLES.length) {
+			if (
+				!Number.isInteger(choice) ||
+				choice < 1 ||
+				choice > STYLES.length
+			) {
 				return next(
 					{
 						step: "style",
 						category: Reply.category
 					},
 					"❌ Style invalide.\n\n" +
-					STYLES.map((item, i) => `${i + 1}️⃣ ${item}`).join("\n") +
-					"\n\nChoisis un numéro entre 1 et 7."
+					STYLES.map((item, i) =>
+						`${i + 1}️⃣ ${item}`
+					).join("\n")
 				);
 			}
 
@@ -260,37 +560,34 @@ module.exports = {
 					category: Reply.category,
 					style: choice - 1
 				},
-				"╔══════ ✍️ ══════╗\n" +
-				"       RÉDACTION\n" +
-				"╚════════════════╝\n\n" +
-				`📂 Catégorie : ${CATEGORIES[Reply.category]}\n` +
-				`🎨 Style : ${STYLES[choice - 1]}\n\n` +
-				"Envoie maintenant le texte de ton annonce.\n\n" +
-				"⚠️ Ton texte sera conservé et présenté dans le style choisi."
+				[
+					"╔══════ ✍️ ══════╗",
+					"       RÉDACTION",
+					"╚════════════════╝",
+					"",
+					`📂 Catégorie : ${CATEGORIES[Reply.category]}`,
+					`🎨 Style : ${STYLES[choice - 1]}`,
+					"",
+					"Envoie le contenu de ton annonce.",
+					"",
+					"Maximum : 5 000 caractères."
+				].join("\n")
 			);
 		}
 
-		// ÉTAPE 3 : CONTENU
-		if (Reply.step === "content") {
-			if (!answer || answer.length < 2) {
-				return next(
-					{
-						step: "content",
-						category: Reply.category,
-						style: Reply.style
-					},
-					"❌ Ton annonce est trop courte.\nEnvoie un texte valide."
-				);
-			}
+		/* =================================
+		   CONTENU DE L'ANNONCE
+		================================= */
 
-			if (answer.length > 5000) {
+		if (Reply.step === "content") {
+			if (answer.length < 2 || answer.length > 5000) {
 				return next(
 					{
 						step: "content",
 						category: Reply.category,
 						style: Reply.style
 					},
-					"❌ Maximum autorisé : 5 000 caractères.\nRaccourcis ton annonce."
+					"❌ Ton annonce doit contenir entre 2 et 5 000 caractères."
 				);
 			}
 
@@ -311,20 +608,23 @@ module.exports = {
 				"\n\n╔══════ 👁️ ══════╗\n" +
 				"       APERÇU FINAL\n" +
 				"╚════════════════╝\n\n" +
-				"1️⃣ ENVOYER DANS TOUS LES GROUPES\n" +
-				"2️⃣ ANNULER LA DIFFUSION\n\n" +
+				"1️⃣ CONFIRMER LA DIFFUSION\n" +
+				"2️⃣ ANNULER\n\n" +
 				"Réponds avec 1 ou 2."
 			);
 		}
 
-		// ÉTAPE 4 : CONFIRMATION
+		/* =================================
+		   CONFIRMATION ET DIFFUSION
+		================================= */
+
 		if (Reply.step === "confirm") {
 			if (choice === 2) {
 				return message.reply(
 					"╔══════ ❌ ══════╗\n" +
-					"     DIFFUSION ANNULÉE\n" +
+					"    DIFFUSION ANNULÉE\n" +
 					"╚════════════════╝\n\n" +
-					"🖤 Aucun groupe n'a reçu cette annonce."
+					"♛ Aucun groupe n'a reçu cette annonce."
 				);
 			}
 
@@ -336,7 +636,7 @@ module.exports = {
 						style: Reply.style,
 						content: Reply.content
 					},
-					"⚠️ Réponse invalide.\n\n1️⃣ Envoyer\n2️⃣ Annuler"
+					"⚠️ Réponse invalide.\n\n1️⃣ Confirmer\n2️⃣ Annuler"
 				);
 			}
 
@@ -349,13 +649,16 @@ module.exports = {
 
 			const uniqueGroups = [
 				...new Map(
-					groups.map(group => [String(group.threadID), group])
+					groups.map(group => [
+						String(group.threadID),
+						group
+					])
 				).values()
 			];
 
 			if (uniqueGroups.length === 0) {
 				return message.reply(
-					"⚠️ Aucun groupe disponible pour la diffusion."
+					"⚠️ Aucun groupe disponible."
 				);
 			}
 
@@ -365,17 +668,51 @@ module.exports = {
 				Reply.content
 			);
 
+			const records = loadStore();
+
+			const record = {
+				id: createAnnouncementID(),
+				category: CATEGORIES[Reply.category],
+				style: STYLES[Reply.style],
+				date: new Date().toLocaleString("fr-FR"),
+				content: Reply.content,
+				sentCount: 0,
+				removedCount: 0,
+				messages: [],
+				status: "en cours"
+			};
+
+			// Enregistrement avant la diffusion
+			records.push(record);
+
+			while (records.length > MAX_HISTORY)
+				records.shift();
+
+			try {
+				saveStore(records);
+			}
+			catch (err) {
+				console.error("[ANNONCE] Stockage impossible :", err);
+
+				return message.reply(
+					"⛔ Impossible d'enregistrer l'annonce. " +
+					"Aucune diffusion n'a été lancée."
+				);
+			}
+
 			await message.reply(
 				"╔══════ 🚀 ══════╗\n" +
-				"     DIFFUSION LANCÉE\n" +
+				"    IMPERIAL BROADCAST\n" +
 				"╚════════════════╝\n\n" +
+				`🆔 ${record.id}\n` +
 				`📦 Groupes ciblés : ${uniqueGroups.length}\n` +
 				`⚡ Envois simultanés : ${CONCURRENCY}\n\n` +
-				"Le rapport sera envoyé à la fin."
+				"✦ Diffusion en cours..."
 			);
 
 			let success = 0;
 			let failed = 0;
+			let untracked = 0;
 			let completed = 0;
 
 			for (
@@ -388,58 +725,271 @@ module.exports = {
 				const results = await Promise.all(
 					batch.map(async group => {
 						try {
-							await sendWithTimeout(
+							const info = await sendWithTimeout(
 								api,
 								announcement,
 								group.threadID
 							);
-							return true;
+
+							return {
+								ok: true,
+								threadID: String(group.threadID),
+								messageID: info?.messageID || info?.messageId || null
+							};
 						}
 						catch (err) {
 							console.error(
-								`[ANNONCE] Échec ${group.threadID}:`,
+								"[ANNONCE] Échec :",
+								group.threadID,
 								err.message || err
 							);
-							return false;
+
+							return {
+								ok: false,
+								threadID: String(group.threadID)
+							};
 						}
 					})
 				);
 
 				for (const result of results) {
-					if (result)
-						success++;
-					else
-						failed++;
-				}
+					completed++;
 
-				completed += batch.length;
+					if (!result.ok) {
+						failed++;
+						continue;
+					}
+
+					if (!result.messageID) {
+						untracked++;
+						continue;
+					}
+
+					success++;
+
+					record.messages.push({
+						threadID: result.threadID,
+						messageID: result.messageID
+					});
+
+					record.sentCount++;
+
+					// Sauvegarde après chaque message enregistré
+					try {
+						saveStore(records);
+					}
+					catch (err) {
+						console.error(
+							"[ANNONCE] Erreur de sauvegarde :",
+							err
+						);
+					}
+				}
 
 				if (completed < uniqueGroups.length)
 					await sleep(BATCH_DELAY);
+			}
 
-				console.log(
-					`[ANNONCE] Progression : ${completed}/${uniqueGroups.length} | Réussis : ${success} | Échecs : ${failed}`
-				);
+			record.status = "diffusion terminée";
+
+			try {
+				saveStore(records);
+			}
+			catch (err) {
+				console.error("[ANNONCE] Sauvegarde finale :", err);
 			}
 
 			return message.reply(
-				"╔════════════════════════════╗\n" +
-				"       📊 RAPPORT FINAL\n" +
-				"╚════════════════════════════╝\n\n" +
-				`📂 Catégorie : ${CATEGORIES[Reply.category]}\n` +
-				`🎨 Style : ${STYLES[Reply.style]}\n\n` +
-				"━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+				"╔════════ ◈ ♛ ◈ ════════╗\n" +
+				"       IMPERIAL REPORT\n" +
+				"╚════════ ◈ ♛ ◈ ════════╝\n\n" +
+				`🆔 ${record.id}\n` +
 				`📦 Groupes ciblés : ${uniqueGroups.length}\n` +
-				`✅ Envois réussis : ${success}\n` +
-				`❌ Envois échoués : ${failed}\n` +
-				`📊 Total traité : ${completed}\n` +
-				"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
+				`✅ Messages enregistrés : ${success}\n` +
+				`⚠️ Messages sans identifiant : ${untracked}\n` +
+				`❌ Échecs : ${failed}\n` +
+				`📊 Total traité : ${completed}\n\n` +
+				"━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+				"♛ ANNONCE ARCHIVÉE ♛\n" +
+				"━━━━━━━━━━━━━━━━━━━━━━━━\n\n" +
 				(
-					failed === 0
-						? "🖤 Toutes les annonces ont été envoyées."
-						: "⚠️ Diffusion terminée. Certains envois ont échoué."
+					failed === 0 && untracked === 0
+						? "💎 Tous les messages ont été enregistrés."
+						: "⚠️ Certains messages ne pourront pas être retirés automatiquement."
 				)
 			);
 		}
-	}
-};
+
+		/* =================================
+		   SÉLECTION DE L'ANNONCE À RETIRER
+		================================= */
+
+		if (Reply.step === "removeList") {
+			if (
+				!Number.isInteger(choice) ||
+				choice < 1 ||
+				choice > Reply.announcementIDs.length
+			) {
+				return next(
+					{
+						step: "removeList",
+						announcementIDs: Reply.announcementIDs
+					},
+					"❌ Numéro invalide. Choisis une annonce dans la liste."
+				);
+			}
+
+			const announcementID =
+				Reply.announcementIDs[choice - 1];
+
+			const record = loadStore().find(
+				item => item.id === announcementID
+			);
+
+			if (!record || !record.messages.length) {
+				return message.reply(
+					"⚠️ Cette annonce n'est plus disponible."
+				);
+			}
+
+			return next(
+				{
+					step: "removeConfirm",
+					announcementID
+				},
+				[
+					"╔════════ ◈ 🗑️ ◈ ════════╗",
+					"       CONFIRMATION",
+					"╚════════ ◈ 🗑️ ◈ ════════╝",
+					"",
+					`📜 ${record.category}`,
+					`🆔 ${record.id}`,
+					`📦 Messages à retirer : ${record.messages.length}`,
+					"",
+					"⚠️ Cette action tentera de retirer",
+					"cette annonce dans tous les groupes",
+					"où elle a été diffusée.",
+					"",
+					"1️⃣ CONFIRMER LE RETRAIT",
+					"2️⃣ ANNULER",
+					"",
+					"Réponds avec 1 ou 2."
+				].join("\n")
+			);
+		}
+
+		/* =================================
+		   CONFIRMATION DE SUPPRESSION
+		================================= */
+
+		if (Reply.step === "removeConfirm") {
+			if (choice === 2) {
+				return message.reply(
+					"🖤 Opération annulée. Aucun message n'a été retiré."
+				);
+			}
+
+			if (choice !== 1) {
+				return next(
+					{
+						step: "removeConfirm",
+						announcementID: Reply.announcementID
+					},
+					"⚠️ Réponse invalide.\n\n1️⃣ Confirmer\n2️⃣ Annuler"
+				);
+			}
+
+			const records = loadStore();
+
+			const record = records.find(
+				item => item.id === Reply.announcementID
+			);
+
+			if (!record || !record.messages.length) {
+				return message.reply(
+					"⚠️ Cette annonce ne contient plus de messages à retirer."
+				);
+			}
+
+			const targets = [...record.messages];
+
+			await message.reply(
+		"╔══════ 🗑️ ══════╗\n" +
+        "   IMPERIAL REMOVAL\n" +
+        "╚════════════════╝\n\n" +
+`📦 Messages à retirer : ${targets.length}\n` +
+"✦ Opération en cours..."
+);
+
+let removed = 0;
+let failed = 0;
+let completed = 0;
+
+for (
+    let i = 0;
+    i < targets.length;
+    i += CONCURRENCY
+) {
+    const batch = targets.slice(i, i + CONCURRENCY);
+
+    const results = await Promise.all(
+        batch.map(async target => {
+            try {
+                await unsendWithTimeout(
+                    api,
+                    target.messageID
+                );
+
+                return {
+                    ok: true,
+                    target
+                };
+            }
+            catch (err) {
+                console.error(
+                    "[IMPERIAL REMOVAL] Error:",
+                    err
+                );
+
+                return {
+                    ok: false,
+                    target
+                };
+            }
+        })
+    );
+
+    for (const result of results) {
+        completed++;
+
+        if (result.ok) {
+            removed++;
+        } else {
+            failed++;
+        }
+    }
+
+    if (i + CONCURRENCY < targets.length) {
+        await delay(400);
+    }
+}
+
+const remaining = targets.filter(target => {
+    return !removedTargets.includes(target.messageID);
+});
+
+return api.sendMessage(
+    "╔══════ ⚜️ ══════╗\n" +
+    "    IMPERIAL REPORT\n" +
+    "╚════════════════╝\n\n" +
+    `✦ Messages traités : ${completed}\n` +
+    `🗑️ Messages retirés : ${removed}\n` +
+    `⚠️ Échecs : ${failed}\n` +
+    `📦 Messages restants : ${failed}\n\n` +
+    (
+        failed === 0
+            ? "✧ IMPERIAL REMOVAL COMPLETE ✧"
+            : "✧ IMPERIAL REMOVAL PARTIAL ✧"
+    ),
+    event.threadID
+);
