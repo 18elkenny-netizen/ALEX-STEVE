@@ -1,3 +1,4 @@
+
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
@@ -5,41 +6,76 @@ const path = require("path");
 module.exports = {
   config: {
     name: "leave",
-    version: "3.1.0 Hori Edition",
+    version: "4.0.0 Shadow Edition",
     author: "Shade × Gemini",
     category: "events"
   },
 
   langs: {
-    en: {
-      session1: "Matin",
-      session2: "Midi",
-      session3: "Après-midi",
-      session4: "Soirée",
-      leaveType1: "a quitté de son plein gré",
-      leaveType2: "a été retiré du personnel de",
-      defaultLeaveMessage:
-`✨ 🌸 **[ LOGOUT PROTOCOL ACTIVATED ]** 🌸 ✨
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-꒰ა ✦ **GOODBYE SYSTEM** ✦ ໒꒱
+    fr: {
+      leaveType1: "a quitté le groupe de son plein gré",
+      leaveType2: "a été expulsé(e) du groupe",
 
-» 👤 **Utilisateur :** {userName}
-» 🚪 **Statut :** {type} le groupe
+      messageVoluntary:
+`╔═══════「 ☾ SHADOW SYSTEM ☽ 」═══════╗
+       ⚜️ DÉCONNEXION DÉTECTÉE ⚜️
+╚══════════════════════════════════╝
 
-» 🏡 **Salon :** {threadName}
-» ⏰ **Heure :** {time} ({session})
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 _Le terminal de connexion a été réinitialisé pour cet utilisateur._`
+👤 Nom : {userName}
+🚪 Statut : Départ volontaire
+
+💬 « Même les légendes savent quand
+il est temps de disparaître. »
+
+☠️ Le groupe continuera sans toi.
+Ne t'inquiète pas, personne ne va
+arrêter le monde pour ton départ. 😏
+
+🏰 Groupe : {threadName}
+⏰ Heure : {time} | {session}
+
+╔══════════════════════════════════╗
+       SYSTEM : SESSION TERMINÉE
+╚══════════════════════════════════╝`,
+
+      messageRemoved:
+`╔═══════「 ☾ SHADOW SYSTEM ☽ 」═══════╗
+       ⚜️ EXPULSION DÉTECTÉE ⚜️
+╚══════════════════════════════════╝
+
+👤 Nom : {userName}
+🚫 Statut : Retiré(e) du groupe
+
+💬 « Visiblement, ta présence
+n'était plus indispensable. »
+
+☠️ Une place vient de se libérer.
+Le groupe respire déjà un peu mieux.
+La prochaine fois, réfléchis avant
+de jouer au génie. 😈
+
+🏰 Groupe : {threadName}
+⏰ Heure : {time} | {session}
+
+╔══════════════════════════════════╗
+       SYSTEM : ACCÈS RÉVOQUÉ
+╚══════════════════════════════════╝`
     }
   },
 
-  onStart: async function ({ threadsData, message, event, api, usersData, getLang }) {
+  onStart: async function ({
+    threadsData, message, event, api, usersData, getLang
+  }) {
     if (event.logMessageType !== "log:unsubscribe") return;
 
     const { threadID } = event;
     const threadData = await threadsData.get(threadID);
 
-    if (threadData && threadData.settings && threadData.settings.sendLeaveMessage === false) return;
+    if (
+      threadData &&
+      threadData.settings &&
+      threadData.settings.sendLeaveMessage === false
+    ) return;
 
     const { leftParticipantFbId } = event.logMessageData;
     const botID = api.getCurrentUserID();
@@ -57,57 +93,65 @@ module.exports = {
       const minutes = String(date.getMinutes()).padStart(2, "0");
       const timeFormatted = `${hours}:${minutes}`;
 
-      let leaveMessage = getLang("defaultLeaveMessage");
+      const session =
+        hours <= 10 ? "Matin" :
+        hours <= 12 ? "Midi" :
+        hours <= 18 ? "Après-midi" : "Soirée";
 
-      leaveMessage = leaveMessage
-        .replace(/\{userName\}|\{userNameTag\}/g, userName)
-        .replace(
-          /\{type\}/g,
-          leftParticipantFbId == event.author
-            ? getLang("leaveType1")
-            : getLang("leaveType2")
-        )
-        .replace(/\{threadName\}|\{boxName\}/g, threadName)
+      const voluntary = String(leftParticipantFbId) ===
+        String(event.author);
+
+      const template = voluntary
+        ? getLang("messageVoluntary")
+        : getLang("messageRemoved");
+
+      const leaveMessage = template
+        .replace(/\{userName\}/g, userName)
+        .replace(/\{threadName\}/g, threadName)
         .replace(/\{time\}/g, timeFormatted)
-        .replace(
-          /\{session\}/g,
-          hours <= 10
-            ? getLang("session1")
-            : hours <= 12
-            ? getLang("session2")
-            : hours <= 18
-            ? getLang("session3")
-            : getLang("session4")
-        );
+        .replace(/\{session\}/g, session);
 
       const form = { body: leaveMessage, mentions: [] };
 
-      const userAvatar = `https://graph.facebook.com/${leftParticipantFbId}/picture?width=400&height=400&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
-      const backgroundUrl = "https://i.ibb.co/4YBNyvP/images-76.jpg";
+      const userAvatar =
+        `https://graph.facebook.com/${leftParticipantFbId}/picture?width=400&height=400`;
 
-      // Conserve l'appel exact à ton API externe
-      const apiUrl = `https://zetbot-page.onrender.com/api/goodbye?pp=${encodeURIComponent(userAvatar)}&nama=${encodeURIComponent(userName)}&bg=${encodeURIComponent(backgroundUrl)}&member=${memberCount}`;
+      const backgroundUrl =
+        "https://i.ibb.co/4YBNyvP/images-76.jpg";
+
+      const apiUrl =
+        `https://zetbot-page.onrender.com/api/goodbye?pp=${encodeURIComponent(userAvatar)}&nama=${encodeURIComponent(userName)}&bg=${encodeURIComponent(backgroundUrl)}&member=${memberCount}`;
 
       const tmp = path.join(__dirname, "..", "cache");
       await fs.ensureDir(tmp);
-      const imagePath = path.join(tmp, `leave_${leftParticipantFbId}_${Date.now()}.png`);
+
+      const imagePath = path.join(
+        tmp,
+        `leave_${leftParticipantFbId}_${Date.now()}.png`
+      );
 
       try {
-        const response = await axios.get(apiUrl, { responseType: "arraybuffer", timeout: 10000 });
-        fs.writeFileSync(imagePath, response.data);
+        const response = await axios.get(apiUrl, {
+          responseType: "arraybuffer",
+          timeout: 10000
+        });
+
+        await fs.writeFile(imagePath, response.data);
         form.attachment = fs.createReadStream(imagePath);
       } catch (apiErr) {
-        console.error("❌ Impossible de charger l'image d'adieu depuis l'API :", apiErr.message);
+        console.error("Impossible de charger la carte :", apiErr.message);
       }
 
       await message.send(form);
 
       setTimeout(() => {
-        try { if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath); } catch (e) {}
+        try {
+          if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+        } catch (e) {}
       }, 5000);
 
     } catch (err) {
-      console.error("❌ Error running leave event:", err);
+      console.error("Error running leave event:", err);
     }
   }
 };
