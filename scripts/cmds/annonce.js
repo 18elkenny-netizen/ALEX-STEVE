@@ -878,118 +878,145 @@ module.exports = {
 			);
 		}
 
-		/* =================================
-		   CONFIRMATION DE SUPPRESSION
-		================================= */
+	
+        /* =================================
+           CONFIRMATION DE SUPPRESSION
+        ================================= */
 
-		if (Reply.step === "removeConfirm") {
-			if (choice === 2) {
-				return message.reply(
-					"🖤 Opération annulée. Aucun message n'a été retiré."
-				);
-			}
+        if (Reply.step === "removeConfirm") {
+            if (choice === 2) {
+                return message.reply(
+                    "🖤 Opération annulée. Aucun message n'a été retiré."
+                );
+            }
 
-			if (choice !== 1) {
-				return next(
-					{
-						step: "removeConfirm",
-						announcementID: Reply.announcementID
-					},
-					"⚠️ Réponse invalide.\n\n1️⃣ Confirmer\n2️⃣ Annuler"
-				);
-			}
+            if (choice !== 1) {
+                return next(
+                    {
+                        step: "removeConfirm",
+                        announcementID: Reply.announcementID
+                    },
+                    "⚠️ Réponse invalide.\n\n1️⃣ Confirmer\n2️⃣ Annuler"
+                );
+            }
 
-			const records = loadStore();
+            const records = loadStore();
 
-			const record = records.find(
-				item => item.id === Reply.announcementID
-			);
+            const record = records.find(
+                item => item.id === Reply.announcementID
+            );
 
-			if (!record || !record.messages.length) {
-				return message.reply(
-					"⚠️ Cette annonce ne contient plus de messages à retirer."
-				);
-			}
+            if (!record || !record.messages.length) {
+                return message.reply(
+                    "⚠️ Cette annonce ne contient plus de messages à retirer."
+                );
+            }
 
-			const targets = [...record.messages];
+            const targets = [...record.messages];
 
-			await message.reply(
-		"╔══════ 🗑️ ══════╗\n" +
-        "   IMPERIAL REMOVAL\n" +
-        "╚════════════════╝\n\n" +
-`📦 Messages à retirer : ${targets.length}\n` +
-"✦ Opération en cours..."
-);
+            await message.reply(
+                "╔══════ 🗑️ ══════╗\n" +
+                "   IMPERIAL REMOVAL\n" +
+                "╚════════════════╝\n\n" +
+                `📦 Messages à retirer : ${targets.length}\n` +
+                "✦ Opération en cours..."
+            );
 
-let removed = 0;
-let failed = 0;
-let completed = 0;
+            let removed = 0;
+            let failed = 0;
+            let completed = 0;
 
-for (
-    let i = 0;
-    i < targets.length;
-    i += CONCURRENCY
-) {
-    const batch = targets.slice(i, i + CONCURRENCY);
+            const removedTargets = new Set();
 
-    const results = await Promise.all(
-        batch.map(async target => {
-            try {
-                await unsendWithTimeout(
-                    api,
-                    target.messageID
+            for (
+                let i = 0;
+                i < targets.length;
+                i += CONCURRENCY
+            ) {
+                const batch = targets.slice(i, i + CONCURRENCY);
+
+                const results = await Promise.all(
+                    batch.map(async target => {
+                        try {
+                            await unsendWithTimeout(
+                                api,
+                                target.messageID
+                            );
+
+                            return {
+                                ok: true,
+                                target
+                            };
+                        }
+                        catch (err) {
+                            console.error(
+                                "[IMPERIAL REMOVAL] Error:",
+                                err
+                            );
+
+                            return {
+                                ok: false,
+                                target
+                            };
+                        }
+                    })
                 );
 
-                return {
-                    ok: true,
-                    target
-                };
+                for (const result of results) {
+                    completed++;
+
+                    if (result.ok) {
+                        removed++;
+
+                        removedTargets.add(
+                            String(result.target.messageID)
+                        );
+                    } else {
+                        failed++;
+                    }
+                }
+
+                if (i + CONCURRENCY < targets.length) {
+                    await sleep(BATCH_DELAY);
+                }
             }
-            catch (err) {
+
+            // Conserver les messages qui n'ont pas été retirés
+            record.messages = record.messages.filter(target =>
+                !removedTargets.has(String(target.messageID))
+            );
+
+            // Mettre à jour l'historique
+            record.removedCount =
+                (record.removedCount || 0) + removed;
+
+            record.status = record.messages.length === 0
+                ? "annonce entièrement retirée"
+                : "retrait partiel";
+
+            try {
+                saveStore(records);
+            } catch (err) {
                 console.error(
-                    "[IMPERIAL REMOVAL] Error:",
+                    "[IMPERIAL REMOVAL] Erreur de sauvegarde :",
                     err
                 );
-
-                return {
-                    ok: false,
-                    target
-                };
             }
-        })
-    );
 
-    for (const result of results) {
-        completed++;
-
-        if (result.ok) {
-            removed++;
-        } else {
-            failed++;
+            return message.reply(
+                "╔══════ ⚜️ ══════╗\n" +
+                "    IMPERIAL REPORT\n" +
+                "╚════════════════╝\n\n" +
+                `✦ Messages traités : ${completed}\n` +
+                `🗑️ Messages retirés : ${removed}\n` +
+                `⚠️ Échecs : ${failed}\n` +
+                `📦 Messages restants : ${record.messages.length}\n\n` +
+                (
+                    failed === 0
+                        ? "✧ IMPERIAL REMOVAL COMPLETE ✧"
+                        : "✧ IMPERIAL REMOVAL PARTIAL ✧"
+                )
+            );
         }
     }
-
-    if (i + CONCURRENCY < targets.length) {
-        await delay(400);
-    }
-}
-
-const remaining = targets.filter(target => {
-    return !removedTargets.includes(target.messageID);
-});
-
-return api.sendMessage(
-    "╔══════ ⚜️ ══════╗\n" +
-    "    IMPERIAL REPORT\n" +
-    "╚════════════════╝\n\n" +
-    `✦ Messages traités : ${completed}\n` +
-    `🗑️ Messages retirés : ${removed}\n` +
-    `⚠️ Échecs : ${failed}\n` +
-    `📦 Messages restants : ${failed}\n\n` +
-    (
-        failed === 0
-            ? "✧ IMPERIAL REMOVAL COMPLETE ✧"
-            : "✧ IMPERIAL REMOVAL PARTIAL ✧"
-    ),
-    event.threadID
-);
+};
