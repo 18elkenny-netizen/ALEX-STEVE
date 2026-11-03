@@ -77,6 +77,24 @@ function buildHelpMenu() {
     cats[category].push(commandConfig.name || name);
   }
 
+  // Ajouter Raphaël si sa commande est chargée
+  const raphaelCommand = commands.get("raphael");
+
+  if (raphaelCommand) {
+    const aiCategory = normalizeCategory(
+      raphaelCommand.config?.category
+    );
+
+    if (!cats[aiCategory]) cats[aiCategory] = [];
+
+    const raphaelName =
+      raphaelCommand.config?.name || "raphael";
+
+    if (!cats[aiCategory].includes(raphaelName)) {
+      cats[aiCategory].push(raphaelName);
+    }
+  }
+
   for (const category of Object.keys(cats)) {
     cats[category].sort((a, b) => a.localeCompare(b));
   }
@@ -98,6 +116,7 @@ function buildHelpMenu() {
 
   for (const category of orderedCategories) {
     const list = cats[category];
+
     const title = CATEGORY_DESIGNS[category] ||
       `${CATEGORY_ICONS[category] || "📁"} 𝐎𝐓𝐇𝐄𝐑 : ${category.toUpperCase()}`;
 
@@ -208,6 +227,7 @@ module.exports = {
 
       for (const item of matchedCmds) {
         const c = item.config;
+
         const aliases = c.aliases?.length
           ? c.aliases.join(", ")
           : "Aucun";
@@ -269,10 +289,13 @@ module.exports = {
       const usage =
         c.guide?.fr ||
         c.guide?.en ||
-        (typeof c.guide === "string" ? c.guide : "Aucun guide disponible");
+        (typeof c.guide === "string"
+          ? c.guide
+          : "Aucun guide disponible");
 
       const category = c.category || "other";
       const cooldown = `${c.countDown || 0}s`;
+
       const roleText = {
         0: "Tous les utilisateurs",
         1: "Modérateur du groupe",
