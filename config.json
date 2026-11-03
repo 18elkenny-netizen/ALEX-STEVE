@@ -49,7 +49,7 @@
     "whiteListIds": [],
     "notes": "if you enable this feature, only the ids in the whiteListIds section can use the bot"
   },
-  "nickNameBot": "𝙷𝙾𝚁𝙸 ⌬ 𝗔𝗜",
+  "nickNameBot": "ᏦᎬᏁ ⌬ ＡᎨ",
   "prefix": "_",
   "database": {
     "type": "mongodb",
