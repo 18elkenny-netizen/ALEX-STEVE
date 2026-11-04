@@ -1,3 +1,4 @@
+
 const { Readable } = require("stream");
 const {
   createQuestionCard
@@ -81,7 +82,7 @@ module.exports = {
   config: {
     name: "devinette",
     aliases: ["enigme", "riddle"],
-    version: "1.1.0",
+    version: "1.1.1",
     author: "KEN AI",
     countDown: 5,
     role: 0,
@@ -91,7 +92,7 @@ module.exports = {
     guide: "{pn}"
   },
 
-  onStart: async function ({ message, event, usersData }) {
+  onStart: async function ({ message, event, usersData, api }) {
     const userID = String(event.senderID);
     const threadID = String(event.threadID);
 
@@ -102,6 +103,10 @@ module.exports = {
     }
 
     try {
+      if (!api || typeof api.sendMessage !== "function") {
+        throw new Error("L'API sendMessage est indisponible.");
+      }
+
       const stats = await getStats(usersData, userID);
       const levelData = getLevel(stats.xp || 0);
       const name = await usersData.getName(userID);
@@ -127,9 +132,8 @@ module.exports = {
         throw new Error("La carte de devinette n'est pas un Buffer.");
       }
 
-      // Envoyer la carte et récupérer son véritable identifiant
       const sent = await new Promise((resolve, reject) => {
-        global.GoatBot.api.sendMessage(
+        api.sendMessage(
           {
             body:
 `☾ 𝑲𝑬𝑵 𝑨𝑰 — 𝑫𝑬𝑽𝑰𝑵𝑬𝑻𝑻𝑬 ☽
@@ -170,7 +174,6 @@ module.exports = {
         expiresAt: Date.now() + 45000
       });
 
-      // Fin automatique après 45 secondes
       setTimeout(async () => {
         const current = global.GoatBot.onReply.get(sent.messageID);
 
@@ -180,7 +183,7 @@ module.exports = {
         ACTIVE.delete(userID);
 
         try {
-          await global.GoatBot.api.sendMessage(
+          await api.sendMessage(
             `⌛ Temps écoulé, ${name} !
 La bonne réponse était : ${String.fromCharCode(65 + question.answer)} — ${question.options[question.answer]}.
 
@@ -292,4 +295,3 @@ Ne baisse pas les bras, une autre énigme t'attend !`
     }
   }
 };
-
