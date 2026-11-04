@@ -1,4 +1,3 @@
-
 const { Readable } = require("stream");
 const {
   createQuestionCard
@@ -55,11 +54,16 @@ function getLevel(totalXP) {
     needed = 1000 + (level - 1) * 200;
   }
 
-  return { level, xpProgress: remaining, xpNeeded: needed };
+  return {
+    level,
+    xpProgress: remaining,
+    xpNeeded: needed
+  };
 }
 
 async function getStats(usersData, userID) {
   const user = await usersData.get(userID);
+
   return user?.data?.enigma || {
     points: 0,
     xp: 0,
@@ -77,13 +81,13 @@ module.exports = {
   config: {
     name: "devinette",
     aliases: ["enigme", "riddle"],
-    version: "1.0.0",
+    version: "1.1.0",
     author: "KEN AI",
     countDown: 5,
     role: 0,
     shortDescription: "Jouer aux devinettes",
     longDescription: "Réponds aux énigmes et gagne des points et de l'expérience.",
-    category: "games",
+    category: "game",
     guide: "{pn}"
   },
 
@@ -99,7 +103,7 @@ module.exports = {
 
     try {
       const stats = await getStats(usersData, userID);
-      const levelData = getLevel(stats.xp);
+      const levelData = getLevel(stats.xp || 0);
       const name = await usersData.getName(userID);
       const avatarUrl = await usersData.getAvatarUrl(userID);
 
@@ -110,7 +114,7 @@ module.exports = {
       const card = await createQuestionCard({
         name,
         avatarUrl,
-        points: stats.points,
+        points: stats.points || 0,
         level: levelData.level,
         xpProgress: levelData.xpProgress,
         xpNeeded: levelData.xpNeeded,
@@ -119,8 +123,15 @@ module.exports = {
         options: question.options
       });
 
-      const sent = await message.reply({
-        body:
+      if (!Buffer.isBuffer(card)) {
+        throw new Error("La carte de devinette n'est pas un Buffer.");
+      }
+
+      // Envoyer la carte et récupérer son véritable identifiant
+      const sent = await new Promise((resolve, reject) => {
+        global.GoatBot.api.sendMessage(
+          {
+            body:
 `☾ 𝑲𝑬𝑵 𝑨𝑰 — 𝑫𝑬𝑽𝑰𝑵𝑬𝑻𝑻𝑬 ☽
 
 ✦ Une énigme t'attend !
@@ -128,14 +139,24 @@ module.exports = {
 ✦ Réponds en envoyant A, B, C ou D en réponse à cette carte.
 
 ♛ Bonne chance, ${name} !`,
-        attachment: Readable.from(card)
-      });
+            attachment: Readable.from([card])
+          },
+          threadID,
+          (err, info) => {
+            if (err) {
+              return reject(err);
+            }
 
-      if (!sent || !sent.messageID) {
-        return message.reply(
-          "Impossible de démarrer la partie : je n'ai pas reçu l'identifiant de la carte."
+            if (!info || !info.messageID) {
+              return reject(
+                new Error("Identifiant du message introuvable.")
+              );
+            }
+
+            resolve(info);
+          }
         );
-      }
+      });
 
       ACTIVE.add(userID);
 
@@ -149,6 +170,7 @@ module.exports = {
         expiresAt: Date.now() + 45000
       });
 
+      // Fin automatique après 45 secondes
       setTimeout(async () => {
         const current = global.GoatBot.onReply.get(sent.messageID);
 
@@ -159,7 +181,10 @@ module.exports = {
 
         try {
           await global.GoatBot.api.sendMessage(
-            `⌛ Temps écoulé, ${name} !\nLa bonne réponse était : ${String.fromCharCode(65 + question.answer)} — ${question.options[question.answer]}.\n\n☾ Une nouvelle énigme t'attend quand tu seras prêt !`,
+            `⌛ Temps écoulé, ${name} !
+La bonne réponse était : ${String.fromCharCode(65 + question.answer)} — ${question.options[question.answer]}.
+
+☾ Une nouvelle énigme t'attend quand tu seras prêt !`,
             threadID
           );
         } catch (err) {
@@ -169,7 +194,9 @@ module.exports = {
 
     } catch (err) {
       ACTIVE.delete(userID);
+
       console.error("Erreur devinette :", err);
+
       return message.reply(
         "Une erreur est survenue pendant la création de ton énigme. Vérifie les logs de Render."
       );
@@ -188,6 +215,7 @@ module.exports = {
     if (Date.now() > Reply.expiresAt) {
       global.GoatBot.onReply.delete(Reply.messageID);
       ACTIVE.delete(userID);
+
       return message.reply("⌛ Cette énigme a expiré.");
     }
 
@@ -195,7 +223,9 @@ module.exports = {
     const choice = input.replace(/[^ABCD]/g, "");
 
     if (!["A", "B", "C", "D"].includes(choice) || choice.length !== 1) {
-      return message.reply("Réponse invalide ! Envoie seulement A, B, C ou D.");
+      return message.reply(
+        "Réponse invalide ! Envoie seulement A, B, C ou D."
+      );
     }
 
     global.GoatBot.onReply.delete(Reply.messageID);
@@ -203,6 +233,7 @@ module.exports = {
 
     try {
       const stats = await getStats(usersData, userID);
+
       stats.games = (stats.games || 0) + 1;
 
       const selected = choice.charCodeAt(0) - 65;
@@ -234,14 +265,19 @@ module.exports = {
       }
 
       stats.streak = 0;
+
       await saveStats(usersData, userID, stats);
+
+      const correctLetter = String.fromCharCode(65 + Reply.answer);
+      const correctOption = QUESTIONS.find(
+        q => q.question === Reply.question
+      )?.options[Reply.answer];
 
       return message.reply(
 `☾ 𝑲𝑬𝑵 𝑨𝑰 — 𝑹𝑬́𝑺𝑼𝑳𝑻𝑨𝑻 ☽
 
 ✧ Ta réponse : ${choice}
-✧ Bonne réponse : ${String.fromCharCode(65 + Reply.answer)}
-✧ ${["A", "B", "C", "D"][Reply.answer]} — Réponse correcte : ${Reply.answer + 1}
+✧ Bonne réponse : ${correctLetter} — ${correctOption}
 
 Aucun point gagné cette fois.
 Ne baisse pas les bras, une autre énigme t'attend !`
@@ -249,8 +285,11 @@ Ne baisse pas les bras, une autre énigme t'attend !`
 
     } catch (err) {
       console.error("Erreur réponse devinette :", err);
-      return message.reply("Impossible d'enregistrer ton résultat.");
+
+      return message.reply(
+        "Impossible d'enregistrer ton résultat."
+      );
     }
   }
 };
-  
+
