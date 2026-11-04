@@ -5,7 +5,7 @@ const path = require("path");
 module.exports = {
   config: {
     name: "welcome",
-    version: "3.3 BLACKWOOD Edition",
+    version: "3.4 BLACKWOOD Edition",
     author: "KENNY BLACKWOOD",
     category: "events"
   },
@@ -17,19 +17,24 @@ module.exports = {
     const newUsers = logMessageData.addedParticipants || [];
     const botID = String(api.getCurrentUserID());
 
-    // Détecter l'arrivée de BLACKWOOD
+    // ==================================
+    // DÉTECTION DE L'ARRIVÉE DU BOT
+    // ==================================
+
     const botJoined = newUsers.some(
       user => String(user.userFbId) === botID
     );
 
-    // Présentation spéciale de BLACKWOOD
     if (botJoined) {
       try {
         let botName = "BLACKWOOD";
 
         try {
           const botInfo = await api.getUserInfo(botID);
-          botName = botInfo?.[botID]?.name || botInfo?.name || botName;
+          botName =
+            botInfo?.[botID]?.name ||
+            botInfo?.name ||
+            botName;
         } catch (err) {
           console.error("BLACKWOOD name error:", err.message);
         }
@@ -37,16 +42,16 @@ module.exports = {
         const intro =
 
 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       𓆩 🦇 𝐁𝐋𝐀𝐂𝐊𝐖𝐎𝐎𝐃 𓆪
-            ${botName} ☂
-    ⚡ CONNECTED SUCCESSFULLY
+          𓆩 🦇 𝐁𝐋𝐀𝐂𝐊𝐖𝐎𝐎𝐃 𓆪
+            ☂ ${botName} ☂
+     ⚡ CONNECTED SUCCESSFULLY ⚡
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👑 𝐁𝐎𝐓 𝐀𝐃𝐌𝐈𝐍 :𓆩 ᏦᎬᏁᏁᎽ ᏰᏝᎪᏨᏦᏯᎾᎾᎠ 𓆪
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔵 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 :
 https://www.facebook.com/profile.php?id=61595650165092
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 𝐖𝐇𝐀𝐓𝐒𝐀𝐏𝐏 :wa.me/261360563128
+🟢 𝐖𝐇𝐀𝐓𝐒𝐀𝐏𝐏 : wa.me/261360563128
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  ☠️ 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 𝐓𝐎 𝐓𝐇𝐄 𝐃𝐀𝐑𝐊 𝐒𝐈𝐃𝐄 ☠️
        『 𝐍𝐎𝐓 𝐉𝐔𝐒𝐓 𝐀 𝐁𝐎𝐓 』
@@ -60,7 +65,10 @@ https://www.facebook.com/profile.php?id=61595650165092
       }
     }
 
-    // Exclure le bot des nouveaux membres
+    // ==================================
+    // EXCLURE LE BOT
+    // ==================================
+
     const membersToWelcome = newUsers.filter(
       user => String(user.userFbId) !== botID
     );
@@ -69,118 +77,208 @@ https://www.facebook.com/profile.php?id=61595650165092
 
     try {
       const threadInfo = await api.getThreadInfo(threadID);
-      const groupName = threadInfo.threadName || "Secteur Inconnu";
-      const memberCount = threadInfo.participantIDs.length;
 
-      for (const user of membersToWelcome) {
-        const userId = String(user.userFbId);
-        const fullName = user.fullName || "Nouvel arrivant";
+      const groupName =
+        threadInfo.threadName || "Secteur Inconnu";
 
-        let imagePath;
+      const memberCount =
+        threadInfo.participantIDs?.length || 0;
+
+      // ==================================
+      // FONCTION DE RÉCUPÉRATION AVATAR
+      // ==================================
+
+      async function getAvatar(userId, participant) {
+
+        let userInfo = {};
 
         try {
-          const timeStr = new Date().toLocaleString("fr-FR", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour12: false
-          });
+          const result = await api.getUserInfo(userId);
 
-          // ==================================
-          // RÉCUPÉRATION DE LA PHOTO DE PROFIL
-          // ==================================
+          userInfo =
+            result?.[userId] ||
+            result?.[String(userId)] ||
+            result ||
+            {};
 
-          let userAvatar = null;
+        } catch (err) {
+          console.error(
+            "User info error:",
+            userId,
+            err.message
+          );
+        }
 
+        // Récupération de toutes les URL possibles
+        const possibleUrls = [
+          participant?.thumbSrc,
+          participant?.picture,
+          participant?.avatar,
+          participant?.avatarUrl,
+          participant?.photoUrl,
+          participant?.profilePicture,
+          participant?.profilePic,
+
+          userInfo?.thumbSrc,
+          userInfo?.picture,
+          userInfo?.avatar,
+          userInfo?.avatarUrl,
+          userInfo?.photoUrl,
+          userInfo?.profilePicture,
+          userInfo?.profilePic,
+          userInfo?.image,
+          userInfo?.imageUrl,
+          userInfo?.photo,
+          userInfo?.thumbnail
+        ];
+
+        const uniqueUrls = [...new Set(
+          possibleUrls.filter(url =>
+            typeof url === "string" &&
+            /^https?:\/\//i.test(url)
+          )
+        )];
+
+        // Vérification des URL
+        for (const url of uniqueUrls) {
           try {
-            const userInfo = await api.getUserInfo(userId);
-            const profile = userInfo?.[userId] || userInfo;
+            const response = await axios.get(url, {
+              responseType: "arraybuffer",
+              timeout: 15000,
+              maxRedirects: 10,
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+              },
+              validateStatus: status =>
+                status >= 200 && status < 400
+            });
 
-            const possibleAvatars = [
-              profile?.thumbSrc,
-              profile?.picture,
-              profile?.avatar,
-              profile?.avatarUrl,
-              profile?.photoUrl,
-              profile?.profilePicture
-            ];
+            const contentType =
+              response.headers["content-type"] || "";
 
-            userAvatar = possibleAvatars.find(
-              url => typeof url === "string" &&
-              /^https?:\/\//i.test(url)
-            ) || null;
-
-          } catch (profileError) {
-            console.error(
-              `Profile retrieval error for ${userId}:`,
-              profileError.message
-            );
-          }
-
-          // Vérifier que l'URL correspond réellement à une image
-          const checkImage = async (url) => {
-            if (!url) return false;
-
-            try {
-              const response = await axios.get(url, {
-                responseType: "arraybuffer",
-                timeout: 15000,
-                maxRedirects: 10,
-                headers: {
-                  "User-Agent": "Mozilla/5.0"
-                },
-                validateStatus: status => status >= 200 && status < 400
-              });
-
-              const contentType =
-                response.headers["content-type"] || "";
-
-              return (
-                contentType.toLowerCase().includes("image/") &&
-                response.data &&
-                response.data.length > 100
-              );
-
-            } catch (err) {
+            if (
+              contentType.toLowerCase().includes("image/") &&
+              response.data &&
+              response.data.length > 100
+            ) {
               console.log(
-                `Avatar verification failed for ${userId}:`,
-                err.message
+                "Avatar successfully retrieved:",
+                userId
               );
-              return false;
+
+              return url;
             }
-          };
 
-          // Vérifier d'abord la photo récupérée par GoatBot
-          if (!(await checkImage(userAvatar))) {
-            userAvatar = null;
-          }
-
-          // Solution de secours avec Facebook Graph
-          if (!userAvatar) {
-            const fbToken = process.env.FB_TOKEN;
-
-            if (fbToken) {
-              const fallbackUrl =
-                `https://graph.facebook.com/${userId}/picture?type=large&access_token=${encodeURIComponent(fbToken)}`;
-
-              if (await checkImage(fallbackUrl)) {
-                userAvatar = fallbackUrl;
-              }
-            }
-          }
-
-          if (!userAvatar) {
-            console.error(
-              `Aucune photo de profil accessible pour ${userId}`
+          } catch (err) {
+            console.log(
+              "Avatar URL failed:",
+              err.message
             );
           }
+        }
+
+        // ==================================
+        // FACEBOOK GRAPH FALLBACK
+        // ==================================
+
+        const fallbackUrls = [
+          `https://graph.facebook.com/${userId}/picture?type=large`,
+          `https://graph.facebook.com/${userId}/picture?type=large&redirect=true`
+        ];
+
+        if (process.env.FB_TOKEN) {
+          fallbackUrls.unshift(
+            `https://graph.facebook.com/${userId}/picture?type=large&access_token=${encodeURIComponent(process.env.FB_TOKEN)}`
+          );
+        }
+
+        for (const url of fallbackUrls) {
+          try {
+            const response = await axios.get(url, {
+              responseType: "arraybuffer",
+              timeout: 15000,
+              maxRedirects: 10,
+              headers: {
+                "User-Agent": "Mozilla/5.0"
+              },
+              validateStatus: status =>
+                status >= 200 && status < 400
+            });
+
+            const contentType =
+              response.headers["content-type"] || "";
+
+            if (
+              contentType.toLowerCase().includes("image/") &&
+              response.data &&
+              response.data.length > 100
+            ) {
+              console.log(
+                "Facebook fallback avatar retrieved:",
+                userId
+              );
+
+              return url;
+            }
+
+          } catch (err) {
+            console.log(
+              "Facebook fallback failed:",
+              err.message
+            );
+          }
+        }
+
+        console.error(
+          "No accessible profile picture:",
+          userId
+        );
+
+        return null;
+      }
+
+      // ==================================
+      // ACCUEIL DES NOUVEAUX MEMBRES
+      // ==================================
+
+      for (const user of membersToWelcome) {
+
+        const userId = String(user.userFbId);
+
+        const fullName =
+          user.fullName || "Nouvel arrivant";
+
+        let imagePath = null;
+
+        try {
+
+          const timeStr = new Date().toLocaleString(
+            "fr-FR",
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour12: false
+            }
+          );
 
           // ==================================
-          // GÉNÉRATION DE LA CARTE DE BIENVENUE
+          // RÉCUPÉRATION DE LA PHOTO
+          // ==================================
+
+          const userAvatar = await getAvatar(
+            userId,
+            user
+          );
+
+          // ==================================
+          // GÉNÉRATION DE LA CARTE
           // ==================================
 
           const backgroundUrl =
@@ -197,7 +295,12 @@ https://www.facebook.com/profile.php?id=61595650165092
           const apiUrl =
             `https://zetbot-page.onrender.com/api/welcome?${params.toString()}`;
 
-          const tmp = path.join(__dirname, "..", "cache");
+          const tmp = path.join(
+            __dirname,
+            "..",
+            "cache"
+          );
+
           await fs.ensureDir(tmp);
 
           imagePath = path.join(
@@ -207,21 +310,30 @@ https://www.facebook.com/profile.php?id=61595650165092
 
           const response = await axios.get(apiUrl, {
             responseType: "arraybuffer",
-            timeout: 30000,
+            timeout: 45000,
             headers: {
-              "User-Agent": "BLACKWOOD-BOT/3.3"
+              "User-Agent": "BLACKWOOD-BOT/3.4"
             }
           });
 
-          await fs.writeFile(imagePath, response.data);
+          // Vérification du résultat de l'API
+          const contentType =
+            response.headers["content-type"] || "";
 
-          // Vérifier que l'image générée existe
           if (
-            !(await fs.pathExists(imagePath)) ||
-            (await fs.stat(imagePath)).size === 0
+            !contentType.toLowerCase().includes("image/") ||
+            !response.data ||
+            response.data.length < 500
           ) {
-            throw new Error("La carte de bienvenue est vide.");
+            throw new Error(
+              "L'API Welcome n'a pas retourné une image valide."
+            );
           }
+
+          await fs.writeFile(
+            imagePath,
+            response.data
+          );
 
           // ==================================
           // MESSAGE DE BIENVENUE
@@ -241,38 +353,85 @@ https://www.facebook.com/profile.php?id=61595650165092
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⏰ Synchronisé le : ${timeStr}`;
 
-          await api.sendMessage({
-            body: msg,
-            attachment: fs.createReadStream(imagePath),
-            mentions: [
-              {
-                tag: fullName,
-                id: userId
-              }
-            ]
-          }, threadID);
+          await api.sendMessage(
+            {
+              body: msg,
+              attachment: fs.createReadStream(imagePath),
+              mentions: [
+                {
+                  tag: fullName,
+                  id: userId
+                }
+              ]
+            },
+            threadID
+          );
+
+          console.log(
+            `Welcome successfully sent to ${fullName} (${userId})`
+          );
 
         } catch (err) {
+
           console.error(
             `Welcome card error for ${userId}:`,
             err
           );
 
+          // Message de secours si la carte échoue
+          try {
+            await api.sendMessage(
+              {
+                body:
+`🌸 Bienvenue ${fullName} !
+━━━━━━━━━━━━━━━━━━━━
+👤 Nouveau membre : ${fullName}
+💬 Groupe : ${groupName}
+━━━━━━━━━━━━━━━━━━━━
+🖤 BLACKWOOD vous souhaite la bienvenue.`,
+                mentions: [
+                  {
+                    tag: fullName,
+                    id: userId
+                  }
+                ]
+              },
+              threadID
+            );
+
+          } catch (sendError) {
+            console.error(
+              "Fallback welcome error:",
+              sendError.message
+            );
+          }
+
         } finally {
+
+          // ==================================
+          // SUPPRESSION DU FICHIER TEMPORAIRE
+          // ==================================
+
           if (imagePath) {
             try {
               if (await fs.pathExists(imagePath)) {
                 await fs.unlink(imagePath);
               }
             } catch (err) {
-              console.error("Image cleanup error:", err.message);
+              console.error(
+                "Image cleanup error:",
+                err.message
+              );
             }
           }
         }
       }
 
     } catch (err) {
-      console.error("Error fetching thread info:", err);
+      console.error(
+        "Error fetching thread info:",
+        err
+      );
     }
   }
 };
