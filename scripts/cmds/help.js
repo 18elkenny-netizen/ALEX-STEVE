@@ -4,61 +4,39 @@ const config = global.GoatBot.config;
 const fonts = require("../func/fonts.js");
 
 const CATEGORY_ORDER = [
-  "admin",
-  "ai",
-  "anime",
-  "contacts admin",
-  "download",
-  "economy",
-  "fun",
-  "game",
-  "image",
-  "media",
-  "owner",
-  "security",
-  "settings",
-  "system",
-  "tools",
-  "utility"
+  "admin", "ai", "anime", "contacts admin",
+  "download", "economy", "fun", "game",
+  "image", "media", "owner", "security",
+  "settings", "system", "tools", "utility"
 ];
 
 const CATEGORY_DESIGNS = {
-  "admin": "⚔️ 𝐀𝐃𝐌𝐈𝐍",
-  "ai": "🤖 𝐀𝐈",
-  "anime": "⛩️ 𝐀𝐍𝐈𝐌𝐄",
+  admin: "⚔️ 𝐀𝐃𝐌𝐈𝐍",
+  ai: "🤖 𝐀𝐈",
+  anime: "⛩️ 𝐀𝐍𝐈𝐌𝐄",
   "contacts admin": "📞 𝐂𝐎𝐍𝐓𝐀𝐂𝐓𝐒 𝐀𝐃𝐌𝐈𝐍",
-  "download": "📥 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃",
-  "economy": "💰 𝐄𝐂𝐎𝐍𝐎𝐌𝐘",
-  "fun": "🎭 𝐅𝐔𝐍",
-  "game": "🎮 𝐆𝐀𝐌𝐄 & 𝐅𝐔𝐍",
-  "image": "🎨 𝐈𝐌𝐀𝐆𝐄",
-  "media": "🎧 𝐌𝐄𝐃𝐈𝐀",
-  "owner": "👑 𝐎𝐖𝐍𝐄𝐑",
-  "security": "🛡️ 𝐒𝐄𝐂𝐔𝐑𝐈𝐓𝐘",
-  "settings": "⚙️ 𝐒𝐄𝐓𝐓𝐈𝐍𝐆𝐒",
-  "system": "💻 𝐒𝐘𝐒𝐓𝐄𝐌",
-  "tools": "🧰 𝐓𝐎𝐎𝐋𝐒",
-  "utility": "🔧 𝐔𝐓𝐈𝐋𝐈𝐓𝐘"
+  download: "📥 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃",
+  economy: "💰 𝐄𝐂𝐎𝐍𝐎𝐌𝐘",
+  fun: "🎭 𝐅𝐔𝐍",
+  game: "🎮 𝐆𝐀𝐌𝐄 & 𝐅𝐔𝐍",
+  image: "🎨 𝐈𝐌𝐀𝐆𝐄",
+  media: "🎧 𝐌𝐄𝐃𝐈𝐀",
+  owner: "👑 𝐎𝐖𝐍𝐄𝐑",
+  security: "🛡️ 𝐒𝐄𝐂𝐔𝐑𝐈𝐓𝐘",
+  settings: "⚙️ 𝐒𝐄𝐓𝐓𝐈𝐍𝐆𝐒",
+  system: "💻 𝐒𝐘𝐒𝐓𝐄𝐌",
+  tools: "🧰 𝐓𝐎𝐎𝐋𝐒",
+  utility: "🔧 𝐔𝐓𝐈𝐋𝐈𝐓𝐘"
 };
 
 const CATEGORY_ICONS = {
-  "admin": "⚔️",
-  "ai": "🤖",
-  "anime": "⛩️",
-  "contacts admin": "📞",
-  "download": "📥",
-  "economy": "💰",
-  "fun": "🎭",
-  "game": "🎮",
-  "image": "🎨",
-  "media": "🎧",
-  "owner": "👑",
-  "security": "🛡️",
-  "settings": "⚙️",
-  "system": "💻",
-  "tools": "🧰",
-  "utility": "🔧",
-  "other": "📁"
+  admin: "⚔️", ai: "🤖", anime: "⛩️",
+  "contacts admin": "📞", download: "📥",
+  economy: "💰", fun: "🎭", game: "🎮",
+  image: "🎨", media: "🎧", owner: "👑",
+  security: "🛡️", settings: "⚙️",
+  system: "💻", tools: "🧰",
+  utility: "🔧", other: "📁"
 };
 
 function normalizeCategory(category) {
@@ -69,29 +47,51 @@ function buildHelpMenu() {
   const cats = {};
 
   for (const [name, cmd] of commands) {
-    const commandConfig = cmd?.config || {};
-    const category = normalizeCategory(commandConfig.category);
+    const c = cmd?.config || {};
+    const category = normalizeCategory(c.category);
 
     if (!cats[category]) cats[category] = [];
 
-    cats[category].push(commandConfig.name || name);
+    const commandName = c.name || name;
+
+    if (!cats[category].includes(commandName)) {
+      cats[category].push(commandName);
+    }
   }
 
-  // Ajouter Raphaël si sa commande est chargée
+  // Détection de secours pour les jeux DARK SYSTEM.
+  const gameCommands = ["devinette", "echecs"];
+
+  for (const name of gameCommands) {
+    const cmd = commands.get(name);
+
+    if (cmd) {
+      const category = "game";
+
+      if (!cats[category]) cats[category] = [];
+
+      const commandName = cmd.config?.name || name;
+
+      if (!cats[category].includes(commandName)) {
+        cats[category].push(commandName);
+      }
+    }
+  }
+
+  // Ajouter Raphaël si sa commande est chargée.
   const raphaelCommand = commands.get("raphael");
 
   if (raphaelCommand) {
-    const aiCategory = normalizeCategory(
+    const category = normalizeCategory(
       raphaelCommand.config?.category
     );
 
-    if (!cats[aiCategory]) cats[aiCategory] = [];
+    if (!cats[category]) cats[category] = [];
 
-    const raphaelName =
-      raphaelCommand.config?.name || "raphael";
+    const name = raphaelCommand.config?.name || "raphael";
 
-    if (!cats[aiCategory].includes(raphaelName)) {
-      cats[aiCategory].push(raphaelName);
+    if (!cats[category].includes(name)) {
+      cats[category].push(name);
     }
   }
 
@@ -125,7 +125,7 @@ function buildHelpMenu() {
     menu += `\n<${list.length} commande${list.length > 1 ? "s" : ""}>`;
   }
 
-  const p = config.prefix || "~";
+  const p = config.prefix || "_";
 
   menu += [
     "",
@@ -147,7 +147,6 @@ function buildHelpMenu() {
   };
 }
 
-// Permet à updatehelp de reconstruire le menu.
 global.GoatBot.refreshHelpMenu = function () {
   global.GoatBot.helpMenuCache = buildHelpMenu();
   return global.GoatBot.helpMenuCache;
@@ -156,7 +155,7 @@ global.GoatBot.refreshHelpMenu = function () {
 module.exports = {
   config: {
     name: "help",
-    version: "11.0",
+    version: "11.1",
     author: "Shade × Christus",
     countDown: 2,
     role: 0,
@@ -165,7 +164,7 @@ module.exports = {
   },
 
   onStart: async function ({ message, args }) {
-    const p = config.prefix || "~";
+    const p = config.prefix || "_";
 
     // RECHERCHE
     if (args[0] && args[0].toLowerCase() === "search") {
@@ -257,6 +256,7 @@ module.exports = {
 
       const cmd = commands.get(search) ||
         Array.from(commands.values()).find(c =>
+          c.config?.name?.toLowerCase() === search ||
           c.config?.aliases?.some(alias =>
             String(alias).toLowerCase() === search
           )
@@ -326,11 +326,8 @@ module.exports = {
       return message.reply(fonts.christus(detailMsg));
     }
 
-    // MENU GLOBAL
-    const data = global.GoatBot.helpMenuCache ||
-      buildHelpMenu();
-
-    global.GoatBot.helpMenuCache = data;
+    // MENU GLOBAL : reconstruire pour afficher les commandes chargées.
+    const data = global.GoatBot.refreshHelpMenu();
 
     return message.reply(data.menu);
   }
