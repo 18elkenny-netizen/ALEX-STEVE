@@ -1,4 +1,3 @@
-
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
@@ -6,8 +5,8 @@ const path = require("path");
 module.exports = {
   config: {
     name: "welcome",
-    version: "3.0 KEN AI Edition",
-    author: "KEN AI",
+    version: "3.2 BLACKWOOD Edition",
+    author: "KENNY BLACKWOOD",
     category: "events"
   },
 
@@ -18,60 +17,62 @@ module.exports = {
     const newUsers = logMessageData.addedParticipants || [];
     const botID = String(api.getCurrentUserID());
 
-    // Détecter l'arrivée de KEN AI
+    // Détecter l'arrivée de BLACKWOOD
     const botJoined = newUsers.some(
       user => String(user.userFbId) === botID
     );
 
-    // Présentation spéciale de KEN AI
+    // Présentation spéciale de BLACKWOOD
     if (botJoined) {
-      const intro =
-`╭─────── ⋆｡˚ ☾ ˚｡⋆ ───────╮
-       ✦ 𝑺𝒀𝑺𝑻𝑬𝑴 𝑶𝑵𝑳𝑰𝑵𝑬 ✦
-╰─────── ⋆｡˚ ☾ ˚｡⋆ ───────╯
-
-          ✧･ﾟ: *✧･ﾟ:* 
-          𝑲𝑬𝑵 𝑨𝑰
-          *:･ﾟ✧*:･ﾟ✧
-
-꒰ა 💜 𝑩𝒐𝒏𝒋𝒐𝒖𝒓 𝒂̀ 𝒕𝒐𝒖𝒔 ! ໒꒱
-
-Je suis 𝑲𝑬𝑵 𝑨𝑰, votre nouvel assistant intelligent. ✨
-Je viens de rejoindre votre univers pour vous divertir, vous assister et rendre vos échanges encore plus intéressants.
-
-╭───────「 🌸 𝑴𝑬𝑺 𝑭𝑶𝑵𝑪𝑻𝑰𝑶𝑵𝑺 」───────╮
-
-꒰ 🧠 ꒱ 𝑹𝒂𝒑𝒉𝒂𝒆̈𝒍
-       ↳ Assistant intelligent.
-
-꒰ 💰 ꒱ _bal
-       ↳ Consulter votre solde.
-
-꒰ 🎁 ꒱ _give
-       ↳ Transférer de l'argent.
-
-꒰ 🎮 ꒱ _jeu
-       ↳ Jouer et vous divertir.
-
-꒰ ❔ ꒱ _help
-       ↳ Découvrir mes commandes.
-
-╰────────────────────────────╯
-
-꒰ ⚙️ ꒱ 𝑷𝒓𝒆́𝒇𝒊𝒙𝒆 : _
-
-╭─────── ⋆｡˚ ✦ ˚｡⋆ ───────╮
-« 𝑼𝒏 𝒏𝒐𝒖𝒗𝒆𝒂𝒖 𝒔𝒚𝒔𝒕𝒆̀𝒎𝒆
-𝒗𝒊𝒆𝒏𝒕 𝒅𝒆 𝒓𝒆𝒋𝒐𝒊𝒏𝒅𝒓𝒆
-𝒗𝒐𝒕𝒓𝒆 𝒖𝒏𝒊𝒗𝒆𝒓𝒔. » 💜
-
-      ☾ END OF INTRODUCTION ☽
-╰─────── ⋆｡˚ ✦ ˚｡⋆ ───────╯`;
-
       try {
+        // Récupérer automatiquement le nom Facebook du bot
+        let botName = "BLACKWOOD";
+
+        try {
+          const botInfo = await api.getUserInfo(botID);
+          botName = botInfo?.[botID]?.name || botName;
+        } catch (nameErr) {
+          console.error("BLACKWOOD name error:", nameErr);
+        }
+
+        const intro =
+
+`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+𓆩 🦇 𝐁𝐋𝐀𝐂𝐊𝐖𝐎𝐎𝐃 𓆪
+
+${botName} ☂
+⚡ CONNECTED SUCCESSFULLY
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👑 𝐁𝐎𝐓 𝐀𝐃𝐌𝐈𝐍 :
+𓆩 ᏦᎬᏁᏁᎽ ᏰᏝᎪᏨᏦᏯᎾᎾᎠ 𓆪
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔵 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 :
+https://www.facebook.com/profile.php?id=61595650165092
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🟢 𝐖𝐇𝐀𝐓𝐒𝐀𝐏𝐏 :
+wa.me/261360563128
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+☠️ 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 𝐓𝐎
+      𝐓𝐇𝐄 𝐃𝐀𝐑𝐊 𝐒𝐈𝐃𝐄
+
+   『 𝐍𝐎𝐓 𝐉𝐔𝐒𝐓 𝐀 𝐁𝐎𝐓 』
+      𓆩 🖤 𝐀 𝐋𝐄𝐆𝐀𝐂𝐘 🖤 𓆪
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
         await api.sendMessage(intro, threadID);
+
       } catch (err) {
-        console.error("KEN AI introduction error:", err);
+        console.error("BLACKWOOD introduction error:", err);
       }
     }
 
@@ -105,14 +106,43 @@ Je viens de rejoindre votre univers pour vous divertir, vous assister et rendre 
             hour12: false
           });
 
-          // Avatar : token configuré dans Render
+          // Récupération améliorée de la photo de profil
           const fbToken = process.env.FB_TOKEN;
+
           const tokenPart = fbToken
             ? `&access_token=${encodeURIComponent(fbToken)}`
             : "";
 
-          const userAvatar =
-            `https://graph.facebook.com/${userId}/picture?width=400&height=400${tokenPart}`;
+          // Résolution élevée pour récupérer une photo plus nette
+          const avatarUrls = [
+            `https://graph.facebook.com/${userId}/picture?type=large&width=720&height=720${tokenPart}`,
+            `https://graph.facebook.com/${userId}/picture?width=720&height=720${tokenPart}`,
+            `https://graph.facebook.com/${userId}/picture?type=large${tokenPart}`
+          ];
+
+          let userAvatar = avatarUrls[0];
+
+          // Vérifier les différentes possibilités de récupération
+          for (const avatarUrl of avatarUrls) {
+            try {
+              const avatarCheck = await axios.get(avatarUrl, {
+                responseType: "arraybuffer",
+                timeout: 10000,
+                maxRedirects: 5,
+                validateStatus: status => status >= 200 && status < 400
+              });
+
+              if (avatarCheck.data && avatarCheck.data.length > 0) {
+                userAvatar = avatarUrl;
+                break;
+              }
+            } catch (avatarErr) {
+              console.log(
+                `Avatar attempt failed for ${userId}:`,
+                avatarErr.message
+              );
+            }
+          }
 
           const backgroundUrl =
             "https://i.ibb.co/4YBNyvP/images-76.jpg";
@@ -137,15 +167,16 @@ Je viens de rejoindre votre univers pour vous divertir, vous assister et rendre 
           await fs.writeFile(imagePath, response.data);
 
           const msg =
-`✨ 🌸 **[ NOUVEAU SIGNAL D'ARRIVÉE ]** 🌸 ✨
+
+`✨ 🌸 [ NOUVEAU SIGNAL D'ARRIVÉE ] 🌸 ✨
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-꒰ა ✦ **WELCOME PROTOCOL** ✦ ໒꒱
+꒰ა ✦ WELCOME PROTOCOL ✦ ໒꒱
 
-» 👤 **Utilisateur :** ${fullName}
-» 💬 **Bienvenue dans :** ${groupName}
-» 📊 **Index de présence :** Membre n° ${memberCount}
+» 👤 Utilisateur : ${fullName}
+» 💬 Bienvenue dans : ${groupName}
+» 📊 Index de présence : Membre n° ${memberCount}
 
-✦ _Installe-toi confortablement et respecte les règles du groupe !_ ✦
+✦ Installe-toi confortablement et respecte les règles du groupe ! ✦
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⏰ Synchronisé le : ${timeStr}`;
 
