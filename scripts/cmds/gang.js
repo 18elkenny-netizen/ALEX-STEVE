@@ -3,6 +3,10 @@ const fs = require("fs-extra");
 const path = require("path");
 
 const COIN = "₩";
+const DATA_DIR = path.join(__dirname, "cache", "darkcity");
+const GUILD_FILE = path.join(DATA_DIR, "guilds.json");
+
+fs.ensureDirSync(DATA_DIR);
 
 const RANKS = [
   { name: "Petit voyou", exp: 0 },
@@ -10,7 +14,9 @@ const RANKS = [
   { name: "Gangster", exp: 300 },
   { name: "Capo", exp: 700 },
   { name: "Parrain", exp: 1500 },
-  { name: "Roi de la ville", exp: 3000 }
+  { name: "Roi de la ville", exp: 3000 },
+  { name: "Légende du crime", exp: 5000 },
+  { name: "Empereur du crime", exp: 10000 }
 ];
 
 const SHOP = {
@@ -18,25 +24,29 @@ const SHOP = {
     name: "Couteau",
     price: 500,
     type: "weapon",
-    attack: 5
+    attack: 5,
+    emoji: "🔪"
   },
   pistol: {
     name: "Pistolet",
     price: 1500,
     type: "weapon",
-    attack: 15
+    attack: 15,
+    emoji: "🔫"
   },
   armor: {
     name: "Gilet pare-balles",
     price: 1000,
     type: "armor",
-    defense: 10
+    defense: 10,
+    emoji: "🦺"
   },
   vest: {
     name: "Armure renforcée",
     price: 2500,
     type: "armor",
-    defense: 25
+    defense: 25,
+    emoji: "🛡️"
   }
 };
 
@@ -48,14 +58,11 @@ const MISSIONS = [
   { name: "Dette récupérée", min: 150, max: 450, exp: 15 }
 ];
 
-const DATA_DIR = path.join(__dirname, "cache", "darkcity");
-fs.ensureDirSync(DATA_DIR);
-
 function random(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function getRank(exp) {
+function getRank(exp = 0) {
   let rank = RANKS[0];
 
   for (const item of RANKS) {
@@ -65,27 +72,101 @@ function getRank(exp) {
   return rank;
 }
 
+function getNextRank(exp = 0) {
+  return RANKS.find(rank => rank.exp > exp) || null;
+}
+
 function formatTime(ms) {
   const seconds = Math.ceil(ms / 1000);
   const minutes = Math.floor(seconds / 60);
-  const remaining = seconds % 60;
+  const hours = Math.floor(minutes / 60);
 
-  if (minutes > 0) return `${minutes} min ${remaining} sec`;
-  return `${remaining} sec`;
+  if (hours > 0) {
+    return `${hours} h ${minutes % 60} min`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes} min ${seconds % 60} sec`;
+  }
+
+  return `${seconds} sec`;
 }
 
 function getItemName(id) {
-  return SHOP[id]?.name || id;
+  return SHOP[id]?.name || "Aucun";
 }
 
 function getPrefix() {
-  const configuredPrefix = global.GoatBot?.config?.prefix;
+  const value = global.GoatBot?.config?.prefix;
 
-  if (Array.isArray(configuredPrefix)) {
-    return configuredPrefix[0] || "/";
+  if (Array.isArray(value)) {
+    return value[0] || "/";
   }
 
-  return configuredPrefix || "/";
+  return value || "/";
+}
+
+function getGangData(user) {
+  if (!user.data) user.data = {};
+
+  if (!user.data.darkCity) {
+    user.data.darkCity = {
+      cash: 1000,
+      exp: 0,
+      reputation: 0,
+      health: 100,
+      energy: 10,
+      inventory: [],
+      weapon: null,
+      armor: null,
+      lastActions: {},
+      lastDaily: 0,
+      lastEnergy: Date.now()
+    };
+  }
+
+  const g = user.data.darkCity;
+
+  g.cash ??= 1000;
+  g.exp ??= 0;
+  g.reputation ??= 0;
+  g.health ??= 100;
+  g.energy ??= 10;
+  g.inventory ??= [];
+  g.weapon ??= null;
+  g.armor ??= null;
+  g.lastActions ??= {};
+  g.lastDaily ??= 0;
+  g.lastEnergy ??= Date.now();
+
+  return g;
+}
+
+function loadGuildData() {
+  try {
+    if (!fs.existsSync(GUILD_FILE)) {
+      fs.writeJsonSync(GUILD_FILE, {
+        guilds: {},
+        invites: {}
+      }, { spaces: 2 });
+    }
+
+    const data = fs.readJsonSync(GUILD_FILE);
+
+    return {
+      guilds: data.guilds || {},
+      invites: data.invites || {}
+    };
+  } catch (error) {
+    return {
+      guilds: {},
+      invites: {}
+    };
+  }
+}
+
+function saveGuildData(data) {
+  fs.writeJsonSync(GUILD_FILE, data, { spaces: 2 });
 }
 
 function roundedRect(ctx, x, y, width, height, radius, fill, stroke) {
@@ -113,283 +194,359 @@ function roundedRect(ctx, x, y, width, height, radius, fill, stroke) {
 
   if (stroke) {
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.stroke();
   }
 }
 
-async function makeGangProfile(user, name, avatarURL) {
-  const canvas = Canvas.createCanvas(1200, 1450);
-  const ctx = canvas.getContext("2d");
-
-  const gradient = ctx.createLinearGradient(0, 0, 1200, 1450);
-  gradient.addColorStop(0, "#080d0b");
-  gradient.addColorStop(0.5, "#102019");
-  gradient.addColorStop(1, "#050807");
+function drawBackground(ctx, width, height) {
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, "#050907");
+  gradient.addColorStop(0.5, "#102219");
+  gradient.addColorStop(1, "#030504");
 
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 1200, 1450);
+  ctx.fillRect(0, 0, width, height);
 
   ctx.strokeStyle = "#19ff8c";
-  ctx.lineWidth = 5;
-  ctx.strokeRect(25, 25, 1150, 1400);
+  ctx.lineWidth = 4;
+  ctx.strokeRect(18, 18, width - 36, height - 36);
+}
 
+function drawTitle(ctx, title, subtitle, width) {
   ctx.textAlign = "center";
   ctx.fillStyle = "#19ff8c";
-  ctx.font = "bold 65px Arial";
-  ctx.fillText("DARK CITY", 600, 110);
+  ctx.font = "bold 58px Arial";
+  ctx.fillText("DARK CITY", width / 2, 85);
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 34px Arial";
-  ctx.fillText("GANGSTER PROFILE", 600, 165);
+  ctx.font = "bold 30px Arial";
+  ctx.fillText(title, width / 2, 135);
 
-  roundedRect(ctx, 390, 210, 420, 420, 30, "#111c16", "#19ff8c");
+  if (subtitle) {
+    ctx.fillStyle = "#9db9a7";
+    ctx.font = "22px Arial";
+    ctx.fillText(subtitle, width / 2, 175);
+  }
+}
 
-  if (avatarURL) {
-    try {
-      const avatar = await Canvas.loadImage(avatarURL);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(600, 420, 170, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(avatar, 430, 250, 340, 340);
-      ctx.restore();
-    } catch (error) {
-      ctx.fillStyle = "#19ff8c";
-      ctx.font = "bold 150px Arial";
-      ctx.fillText((name || "?").charAt(0).toUpperCase(), 600, 475);
-    }
+async function loadAvatar(url) {
+  if (!url) return null;
+
+  try {
+    return await Canvas.loadImage(url);
+  } catch (error) {
+    return null;
+  }
+}
+
+function drawAvatar(ctx, avatar, x, y, size, name) {
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+
+  ctx.fillStyle = "#17251c";
+  ctx.fillRect(x, y, size, size);
+
+  if (avatar) {
+    const scale = Math.max(size / avatar.width, size / avatar.height);
+    const width = avatar.width * scale;
+    const height = avatar.height * scale;
+
+    ctx.drawImage(
+      avatar,
+      x + (size - width) / 2,
+      y + (size - height) / 2,
+      width,
+      height
+    );
   } else {
     ctx.fillStyle = "#19ff8c";
-    ctx.font = "bold 150px Arial";
-    ctx.fillText((name || "?").charAt(0).toUpperCase(), 600, 475);
+    ctx.font = `bold ${Math.floor(size * 0.48)}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      (name || "?").charAt(0).toUpperCase(),
+      x + size / 2,
+      y + size / 2
+    );
   }
 
-  const rank = getRank(user.exp || 0);
-  const nextRank = RANKS.find(r => r.exp > (user.exp || 0));
-  const currentExp = user.exp || 0;
+  ctx.restore();
 
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+  ctx.strokeStyle = "#19ff8c";
+  ctx.lineWidth = 7;
+  ctx.stroke();
+}
+
+async function makeGangProfile(g, name, avatarURL) {
+  const canvas = Canvas.createCanvas(1100, 1350);
+  const ctx = canvas.getContext("2d");
+
+  drawBackground(ctx, 1100, 1350);
+  drawTitle(ctx, "GANGSTER PROFILE", "IDENTITÉ OFFICIELLE", 1100);
+
+  const avatar = await loadAvatar(avatarURL);
+
+  drawAvatar(ctx, avatar, 400, 210, 300, name);
+
+  ctx.textAlign = "center";
   ctx.fillStyle = "#ffffff";
   ctx.font = "bold 48px Arial";
-  ctx.fillText(name || "Joueur inconnu", 600, 710);
+  ctx.fillText(String(name || "Joueur").slice(0, 25), 550, 570);
+
+  const rank = getRank(g.exp);
+  const next = getNextRank(g.exp);
 
   ctx.fillStyle = "#19ff8c";
-  ctx.font = "bold 36px Arial";
-  ctx.fillText(rank.name, 600, 770);
+  ctx.font = "bold 34px Arial";
+  ctx.fillText(rank.name, 550, 630);
 
-  roundedRect(ctx, 100, 820, 1000, 35, 15, "#26352d");
+  roundedRect(ctx, 100, 680, 900, 32, 15, "#26352d");
 
-  const progress = nextRank
-    ? Math.min(1, currentExp / nextRank.exp)
+  const progress = next
+    ? Math.min(1, (g.exp - rank.exp) / (next.exp - rank.exp))
     : 1;
 
   roundedRect(
     ctx,
     100,
-    820,
-    Math.max(10, 1000 * progress),
-    35,
+    680,
+    Math.max(8, 900 * progress),
+    32,
     15,
     "#19ff8c"
   );
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "26px Arial";
+  ctx.font = "23px Arial";
   ctx.fillText(
-    nextRank
-      ? `${currentExp} / ${nextRank.exp} EXP`
-      : `${currentExp} EXP - RANG MAXIMUM`,
-    600,
-    900
+    next
+      ? `${g.exp} EXP / Prochain grade : ${next.exp} EXP`
+      : `${g.exp} EXP / GRADE MAXIMUM`,
+    550,
+    755
   );
 
   const stats = [
-    ["FORTUNE", `${user.cash || 0} ${COIN}`],
-    ["RÉPUTATION", `${user.reputation || 0}`],
-    ["SANTÉ", `${user.health || 0} / 100`],
-    ["ÉNERGIE", `${user.energy || 0} / 10`],
-    ["ARME", user.weapon ? getItemName(user.weapon) : "Aucune"],
-    ["PROTECTION", user.armor ? getItemName(user.armor) : "Aucune"]
+    ["FORTUNE", `${g.cash} ${COIN}`],
+    ["RÉPUTATION", `${g.reputation}`],
+    ["SANTÉ", `${g.health}/100`],
+    ["ÉNERGIE", `${g.energy}/10`],
+    ["ARME", getItemName(g.weapon)],
+    ["PROTECTION", getItemName(g.armor)]
   ];
 
-  let y = 980;
+  let y = 815;
 
   for (let i = 0; i < stats.length; i++) {
-    const x = i % 2 === 0 ? 100 : 620;
-    if (i % 2 === 0 && i !== 0) y += 125;
+    const x = i % 2 === 0 ? 75 : 565;
 
-    roundedRect(ctx, x, y, 480, 95, 15, "#101a14", "#19ff8c");
+    if (i > 0 && i % 2 === 0) y += 135;
+
+    roundedRect(ctx, x, y, 460, 105, 15, "#101a14", "#19ff8c");
 
     ctx.textAlign = "left";
     ctx.fillStyle = "#19ff8c";
-    ctx.font = "bold 23px Arial";
-    ctx.fillText(stats[i][0], x + 25, y + 35);
+    ctx.font = "bold 22px Arial";
+    ctx.fillText(stats[i][0], x + 22, y + 38);
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 27px Arial";
-    ctx.fillText(stats[i][1], x + 25, y + 72);
+    ctx.fillText(String(stats[i][1]), x + 22, y + 78);
   }
 
   ctx.textAlign = "center";
   ctx.fillStyle = "#19ff8c";
   ctx.font = "bold 28px Arial";
-  ctx.fillText("𓆩 DARK CITY GANG 𓆪", 600, 1390);
+  ctx.fillText("𓆩 DARK CITY GANG 𓆪", 550, 1290);
 
   return canvas.toBuffer("image/png");
 }
 
-async function makeGangRanking(players, currentPlayer) {
-  const canvas = Canvas.createCanvas(1536, 900);
+async function makeShopImage() {
+  const canvas = Canvas.createCanvas(1100, 900);
   const ctx = canvas.getContext("2d");
 
-  const gradient = ctx.createLinearGradient(0, 0, 1536, 900);
-  gradient.addColorStop(0, "#070d09");
-  gradient.addColorStop(1, "#14251a");
+  drawBackground(ctx, 1100, 900);
+  drawTitle(ctx, "BLACK MARKET", "ARMES ET PROTECTIONS", 1100);
 
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 1536, 900);
+  const items = Object.entries(SHOP);
 
-  ctx.strokeStyle = "#19ff8c";
-  ctx.lineWidth = 5;
-  ctx.strokeRect(25, 25, 1486, 850);
+  for (let i = 0; i < items.length; i++) {
+    const [id, item] = items[i];
+    const x = i % 2 === 0 ? 65 : 565;
+    const y = 220 + Math.floor(i / 2) * 290;
+
+    roundedRect(ctx, x, y, 470, 245, 20, "#101a14", "#19ff8c");
+
+    ctx.textAlign = "center";
+    ctx.font = "65px Arial";
+    ctx.fillText(item.emoji, x + 235, y + 85);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 29px Arial";
+    ctx.fillText(item.name, x + 235, y + 130);
+
+    ctx.fillStyle = "#19ff8c";
+    ctx.font = "bold 25px Arial";
+    ctx.fillText(`${item.price} ${COIN}`, x + 235, y + 175);
+
+    ctx.fillStyle = "#b7d6c2";
+    ctx.font = "21px Arial";
+    ctx.fillText(
+      item.type === "weapon"
+        ? `ATTAQUE +${item.attack}`
+        : `DÉFENSE +${item.defense}`,
+      x + 235,
+      y + 215
+    );
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#19ff8c";
+    ctx.font = "bold 18px Arial";
+    ctx.fillText(`ID : ${id}`, x + 18, y + 30);
+  }
+
+  return canvas.toBuffer("image/png");
+}
+
+async function makeBattleImage(attacker, defender) {
+  const canvas = Canvas.createCanvas(1200, 850);
+  const ctx = canvas.getContext("2d");
+
+  drawBackground(ctx, 1200, 850);
+  drawTitle(ctx, "GANGSTER BATTLE", "RAPPORT DU COMBAT", 1200);
+
+  const avatar1 = await loadAvatar(attacker.avatar);
+  const avatar2 = await loadAvatar(defender.avatar);
+
+  drawAvatar(ctx, avatar1, 170, 230, 260, attacker.name);
+  drawAvatar(ctx, avatar2, 770, 230, 260, defender.name);
 
   ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 34px Arial";
+  ctx.fillText(String(attacker.name).slice(0, 20), 300, 545);
+  ctx.fillText(String(defender.name).slice(0, 20), 900, 545);
+
   ctx.fillStyle = "#19ff8c";
-  ctx.font = "bold 65px Arial";
-  ctx.fillText("DARK CITY", 768, 100);
+  ctx.font = "bold 25px Arial";
+  ctx.fillText(attacker.rank, 300, 590);
+  ctx.fillText(defender.rank, 900, 590);
+
+  ctx.fillStyle = "#ff5555";
+  ctx.font = "bold 48px Arial";
+  ctx.fillText(`-${defender.damage} PV`, 600, 300);
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 35px Arial";
-  ctx.fillText("GLOBAL GANGSTER RANKING", 768, 155);
+  ctx.font = "bold 25px Arial";
+  ctx.fillText("SANTÉ", 300, 655);
+  ctx.fillText("SANTÉ", 900, 655);
+
+  roundedRect(ctx, 100, 675, 400, 30, 12, "#442222");
+  roundedRect(
+    ctx,
+    100,
+    675,
+    400 * Math.max(0, attacker.health) / 100,
+    30,
+    12,
+    "#19ff8c"
+  );
+
+  roundedRect(ctx, 700, 675, 400, 30, 12, "#442222");
+  roundedRect(
+    ctx,
+    700,
+    675,
+    400 * Math.max(0, defender.health) / 100,
+    30,
+    12,
+    "#ff5555"
+  );
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "23px Arial";
+  ctx.fillText(`${attacker.health}/100`, 300, 740);
+  ctx.fillText(`${defender.health}/100`, 900, 740);
+
+  ctx.fillStyle = "#19ff8c";
+  ctx.font = "bold 24px Arial";
+  ctx.fillText("DARK CITY FIGHT", 600, 805);
+
+  return canvas.toBuffer("image/png");
+}
+
+async function makeRankingImage(players) {
+  const canvas = Canvas.createCanvas(1200, 950);
+  const ctx = canvas.getContext("2d");
+
+  drawBackground(ctx, 1200, 950);
+  drawTitle(ctx, "GLOBAL RANKING", "TOP GANGSTERS", 1200);
 
   ctx.textAlign = "left";
-  ctx.font = "bold 24px Arial";
-  ctx.fillStyle = "#19ff8c";
-
-  ctx.fillText("RANG", 90, 235);
-  ctx.fillText("JOUEUR", 250, 235);
-  ctx.fillText("NIVEAU", 750, 235);
-  ctx.fillText("EXP", 980, 235);
-  ctx.fillText("FORTUNE", 1190, 235);
-
-  let y = 285;
 
   for (let i = 0; i < Math.min(players.length, 10); i++) {
     const player = players[i];
-    const rank = getRank(player.exp || 0);
+    const y = 220 + i * 68;
 
     roundedRect(
       ctx,
       65,
-      y - 35,
-      1400,
-      65,
+      y,
+      1070,
+      55,
       12,
-      i === 0 ? "#173c27" : "#101a14",
-      i === 0 ? "#19ff8c" : "#294333"
+      i === 0 ? "#19452c" : "#101a14",
+      "#19ff8c"
     );
 
     ctx.fillStyle = "#19ff8c";
-    ctx.font = "bold 27px Arial";
-    ctx.fillText(`#${i + 1}`, 100, y + 5);
+    ctx.font = "bold 23px Arial";
+    ctx.fillText(`#${i + 1}`, 90, y + 36);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 24px Arial";
-    ctx.fillText(String(player.name || "Joueur").slice(0, 25), 250, y + 5);
+    ctx.font = "bold 21px Arial";
+    ctx.fillText(String(player.name).slice(0, 22), 190, y + 36);
 
-    ctx.fillStyle = "#b8ffd5";
-    ctx.fillText(rank.name, 750, y + 5);
+    ctx.fillStyle = "#b7d6c2";
+    ctx.fillText(getRank(player.exp).name, 650, y + 36);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(String(player.exp || 0), 980, y + 5);
-    ctx.fillText(`${player.cash || 0} ${COIN}`, 1190, y + 5);
-
-    y += 72;
+    ctx.fillStyle = "#19ff8c";
+    ctx.fillText(`${player.exp} EXP`, 920, y + 36);
   }
 
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#19ff8c";
-  ctx.font = "bold 25px Arial";
-  ctx.fillText(
-    `JOUEURS CLASSÉS : ${players.length}`,
-    768,
-    825
-  );
-
   return canvas.toBuffer("image/png");
-    }module.exports = {
+}module.exports = {
   config: {
     name: "gang",
     aliases: ["gangster", "darkcity"],
-    version: "2.1.0",
+    version: "3.0.0",
     author: "DARK SYSTEM",
     countDown: 3,
     role: 0,
-    description: {
-      fr: "Système RPG gangster DARK CITY",
-      en: "DARK CITY gangster RPG system"
-    },
-    category: "GAME"
+    category: "GAME",
+    shortDescription: "DARK CITY RPG"
   },
 
   onStart: async function ({ api, event, args, message, usersData }) {
     const uid = event.senderID;
-    const threadID = event.threadID;
     const action = (args[0] || "help").toLowerCase();
-
-    const configuredPrefix = global.GoatBot?.config?.prefix;
-    const prefix = Array.isArray(configuredPrefix)
-      ? configuredPrefix[0] || "/"
-      : configuredPrefix || "/";
+    const prefix = getPrefix();
 
     let user = await usersData.get(uid);
 
     if (!user) {
-      user = {
-        money: 0,
-        exp: 0,
-        data: {}
-      };
+      user = { money: 0, exp: 0, data: {} };
     }
 
-    const getGang = data => {
-      if (!data.data) data.data = {};
-
-      if (!data.data.darkCity) {
-        data.data.darkCity = {
-          cash: 1000,
-          exp: 0,
-          reputation: 0,
-          health: 100,
-          energy: 10,
-          inventory: [],
-          weapon: null,
-          armor: null,
-          lastActions: {},
-          lastDaily: 0,
-          lastEnergy: Date.now()
-        };
-      }
-
-      const g = data.data.darkCity;
-
-      g.cash ??= 1000;
-      g.exp ??= 0;
-      g.reputation ??= 0;
-      g.health ??= 100;
-      g.energy ??= 10;
-      g.inventory ??= [];
-      g.weapon ??= null;
-      g.armor ??= null;
-      g.lastActions ??= {};
-      g.lastDaily ??= 0;
-      g.lastEnergy ??= Date.now();
-
-      return g;
-    };
-
-    const g = getGang(user);
+    const g = getGangData(user);
 
     const save = async (id = uid, data = user) => {
       await usersData.set(id, {
@@ -399,25 +556,44 @@ async function makeGangRanking(players, currentPlayer) {
       });
     };
 
-    const getTarget = () => {
-      if (event.messageReply) {
-        return event.messageReply.senderID;
-      }
-
-      if (event.mentions && Object.keys(event.mentions).length > 0) {
-        return Object.keys(event.mentions)[0];
-      }
-
-      return null;
-    };
-
     const getName = async id => {
       try {
         const info = await api.getUserInfo(id);
-        return info[id]?.name || info[id]?.firstName || "Joueur";
+        const profile = info?.[id];
+
+        return profile?.name
+          || profile?.firstName
+          || "Joueur inconnu";
       } catch (error) {
-        return "Joueur";
+        return "Joueur inconnu";
       }
+    };
+
+    const getAvatar = async id => {
+      try {
+        const info = await api.getUserInfo(id);
+        const profile = info?.[id];
+
+        return profile?.largePictureUrl
+          || profile?.profilePictureUrl
+          || profile?.avatarUrl
+          || profile?.thumbSrc
+          || profile?.picture
+          || null;
+      } catch (error) {
+        return null;
+      }
+    };
+
+    const getTarget = () => {
+      if (event.messageReply?.senderID) {
+        return event.messageReply.senderID;
+      }
+
+      const mentions = event.mentions || {};
+      const ids = Object.keys(mentions);
+
+      return ids.length ? ids[0] : null;
     };
 
     const recoverEnergy = () => {
@@ -440,96 +616,180 @@ async function makeGangRanking(players, currentPlayer) {
       return true;
     };
 
-    const cooldown = (key, duration) => {
+    const checkCooldown = (key, duration) => {
       const now = Date.now();
       const last = g.lastActions[key] || 0;
       const remaining = duration - (now - last);
 
       if (remaining > 0) {
-        return {
-          success: false,
-          remaining
-        };
+        return { success: false, remaining };
       }
 
-      g.lastActions[key] = now;
-
-      return {
-        success: true
-      };
+      return { success: true };
     };
 
-    const getAvatar = async id => {
-      try {
-        const info = await api.getUserInfo(id);
-        return info[id]?.largePictureUrl
-          || info[id]?.profilePictureUrl
-          || info[id]?.avatarUrl
-          || info[id]?.thumbSrc
-          || info[id]?.picture
-          || null;
-      } catch (error) {
-        return null;
-      }
+    const setCooldown = key => {
+      g.lastActions[key] = Date.now();
     };
 
-    // PROFILE
-    if (action === "profile" || action === "profil") {
-      const name = await getName(uid);
-      const avatar = await getAvatar(uid);
-
-      const image = await makeGangProfile(g, name, avatar);
-      const filePath = path.join(DATA_DIR, `profile_${uid}.png`);
-
-      fs.writeFileSync(filePath, image);
+    const sendImage = async (buffer, filename, caption) => {
+      const file = path.join(DATA_DIR, filename);
+      fs.writeFileSync(file, buffer);
 
       return message.reply({
-        body: `𓆩 🦇 DARK CITY PROFILE 🦇 𓆪\n\nVoici ton profil de gangster.`,
-        attachment: fs.createReadStream(filePath)
+        body: caption,
+        attachment: fs.createReadStream(file)
       });
+    };
+
+    // PROFIL
+    if (action === "profile" || action === "profil") {
+      recoverEnergy();
+
+      const name = await getName(uid);
+      const avatar = await getAvatar(uid);
+      const image = await makeGangProfile(g, name, avatar);
+
+      await save();
+
+      return sendImage(
+        image,
+        `profile_${uid}.png`,
+        `𓆩 👤 DARK CITY PROFILE 👤 𓆪\nVoici ton profil de gangster.`
+      );
     }
 
-    // WORK
+    // TRAVAIL
     if (action === "work" || action === "travail") {
-      const cd = cooldown("work", 30000);
+      const cd = checkCooldown("work", 30000);
 
       if (!cd.success) {
         return message.reply(
-          `⏳ Tu dois attendre ${formatTime(cd.remaining)} avant de retravailler.`
+          `⏳ Attends ${formatTime(cd.remaining)} avant de retravailler.`
         );
       }
 
       if (!useEnergy(1)) {
-        return message.reply("⚡ Tu n'as pas assez d'énergie. Attends sa récupération.");
+        return message.reply("⚡ Tu n'as pas assez d'énergie.");
       }
+
+      setCooldown("work");
 
       const reward = random(150, 450);
       const exp = random(10, 25);
-      const reputation = random(1, 4);
 
       g.cash += reward;
       g.exp += exp;
-      g.reputation += reputation;
+      g.reputation += random(1, 4);
 
       await save();
 
       return message.reply(
-        `𓆩 🦇 DARK CITY WORK 🦇 𓆪\n\n` +
-        `✅ Travail terminé !\n\n` +
+        `𓆩 💼 TRAVAIL TERMINÉ 💼 𓆪\n\n` +
         `💰 Gain : +${reward} ${COIN}\n` +
         `⭐ EXP : +${exp}\n` +
-        `🔥 Réputation : +${reputation}\n` +
+        `👑 Grade : ${getRank(g.exp).name}\n` +
         `⚡ Énergie : ${g.energy}/10`
       );
     }
 
-    // ROB
+    // DAILY
+    if (action === "daily" || action === "quotidien") {
+      const remaining = 86400000 - (Date.now() - g.lastDaily);
+
+      if (remaining > 0) {
+        return message.reply(
+          `⏳ Récompense déjà récupérée.\nReviens dans ${formatTime(remaining)}.`
+        );
+      }
+
+      const reward = random(500, 1200);
+      const exp = random(20, 50);
+
+      g.cash += reward;
+      g.exp += exp;
+      g.reputation += 10;
+      g.lastDaily = Date.now();
+
+      await save();
+
+      return message.reply(
+        `𓆩 🎁 DAILY REWARD 🎁 𓆪\n\n` +
+        `💰 +${reward} ${COIN}\n` +
+        `⭐ +${exp} EXP\n` +
+        `🔥 +10 réputation\n` +
+        `👑 Grade : ${getRank(g.exp).name}`
+      );
+    }
+
+    // MISSION
+    if (action === "mission" || action === "missions") {
+      const cd = checkCooldown("mission", 120000);
+
+      if (!cd.success) {
+        return message.reply(
+          `⏳ Attends ${formatTime(cd.remaining)} avant ta prochaine mission.`
+        );
+      }
+
+      if (!useEnergy(2)) {
+        return message.reply("⚡ Il te faut 2 points d'énergie.");
+      }
+
+      setCooldown("mission");
+
+      const mission = MISSIONS[random(0, MISSIONS.length - 1)];
+      const reward = random(mission.min, mission.max);
+
+      g.cash += reward;
+      g.exp += mission.exp;
+      g.reputation += 3;
+
+      await save();
+
+      return message.reply(
+        `𓆩 🎯 MISSION ACCOMPLIE 🎯 𓆪\n\n` +
+        `📌 ${mission.name}\n` +
+        `💰 +${reward} ${COIN}\n` +
+        `⭐ +${mission.exp} EXP\n` +
+        `🔥 +3 réputation\n` +
+        `👑 Grade : ${getRank(g.exp).name}`
+      );
+    }
+
+    // SOIN
+    if (action === "heal" || action === "soin") {
+      if (g.health >= 100) {
+        return message.reply("❤️ Ta santé est déjà au maximum.");
+      }
+
+      if (g.cash < 300) {
+        return message.reply(`❌ Il te faut 300 ${COIN} pour te soigner.`);
+      }
+
+      const restored = Math.min(30, 100 - g.health);
+
+      g.cash -= 300;
+      g.health += restored;
+
+      await save();
+
+      return message.reply(
+        `❤️ SOIN EFFECTUÉ\n\n` +
+        `Santé récupérée : +${restored}\n` +
+        `Santé actuelle : ${g.health}/100\n` +
+        `Prix : 300 ${COIN}`
+      );
+    }
+
+    // VOL
     if (action === "rob" || action === "vol") {
       const targetID = getTarget();
 
       if (!targetID) {
         return message.reply(
-          `⚠️ Réponds au message d'un joueur ou mentionne-le.\n\nExemple : ${prefix}gang rob @joueur`
+          `⚠️ Réponds au message d'un joueur ou mentionne-le.\n` +
+          `Exemple : ${prefix}gang rob @joueur`
         );
       }
 
@@ -540,34 +800,31 @@ async function makeGangRanking(players, currentPlayer) {
       const targetUser = await usersData.get(targetID);
 
       if (!targetUser) {
-        return message.reply("❌ Impossible de trouver ce joueur.");
+        return message.reply("❌ Joueur introuvable.");
       }
 
-      const targetGang = getGang(targetUser);
+      const targetGang = getGangData(targetUser);
 
       if (targetGang.cash <= 0) {
         return message.reply("Ce joueur n'a pas d'argent à voler.");
       }
 
-      const cd = cooldown("rob", 60000);
+      const cd = checkCooldown("rob", 60000);
 
       if (!cd.success) {
         return message.reply(
-          `⏳ Attends ${formatTime(cd.remaining)} avant de voler à nouveau.`
+          `⏳ Attends ${formatTime(cd.remaining)}.`
         );
       }
 
       if (!useEnergy(2)) {
-        return message.reply("⚡ Tu n'as pas assez d'énergie.");
+        return message.reply("⚡ Il te faut 2 points d'énergie.");
       }
 
-      const targetName = await getName(targetID);
+      setCooldown("rob");
 
       if (Math.random() < 0.65) {
-        const stolen = Math.min(
-          random(100, 500),
-          targetGang.cash
-        );
+        const stolen = Math.min(random(100, 500), targetGang.cash);
 
         g.cash += stolen;
         targetGang.cash -= stolen;
@@ -579,39 +836,45 @@ async function makeGangRanking(players, currentPlayer) {
 
         return message.reply(
           `𓆩 🦇 BRAQUAGE RÉUSSI 🦇 𓆪\n\n` +
-          `🎯 Victime : ${targetName}\n` +
+          `🎯 Victime : ${await getName(targetID)}\n` +
           `💰 Argent volé : ${stolen} ${COIN}\n` +
-          `⭐ EXP : +20\n` +
-          `🔥 Réputation : +5`
+          `⭐ +20 EXP\n` +
+          `🔥 +5 réputation`
         );
       }
 
       const fine = random(50, 200);
+
       g.cash = Math.max(0, g.cash - fine);
       g.health = Math.max(0, g.health - 10);
 
       await save();
 
       return message.reply(
-        `𓆩 🚨 BRAQUAGE RATÉ 🚨 𓆪\n\n` +
-        `La police t'a repéré !\n` +
-        `💸 Amende : -${fine} ${COIN}\n` +
-        `❤️ Santé : -10`
+        `🚨 BRAQUAGE RATÉ !\n\n` +
+        `La police t'a arrêté.\n` +
+        `💸 Amende : ${fine} ${COIN}\n` +
+        `❤️ Santé : ${g.health}/100`
       );
     }
 
-    // ATTACK
+    // COMBAT AVEC CARTE DES DEUX JOUEURS
     if (action === "attack" || action === "attaquer") {
       const targetID = getTarget();
 
       if (!targetID) {
         return message.reply(
-          `⚠️ Réponds au message d'un joueur ou mentionne-le.\n\nExemple : ${prefix}gang attack @joueur`
+          `⚠️ Réponds au message d'un joueur ou mentionne-le.\n` +
+          `Exemple : ${prefix}gang attack @joueur`
         );
       }
 
       if (targetID === uid) {
         return message.reply("Tu ne peux pas t'attaquer toi-même.");
+      }
+
+      if (g.health <= 0) {
+        return message.reply("☠️ Tu es K.O. Utilise la commande heal.");
       }
 
       const targetUser = await usersData.get(targetID);
@@ -620,27 +883,25 @@ async function makeGangRanking(players, currentPlayer) {
         return message.reply("❌ Joueur introuvable.");
       }
 
-      const targetGang = getGang(targetUser);
+      const targetGang = getGangData(targetUser);
 
       if (targetGang.health <= 0) {
-        return message.reply("Ce joueur est déjà K.O.");
+        return message.reply("☠️ Cet adversaire est déjà K.O.");
       }
 
-      if (g.health <= 0) {
-        return message.reply("Tu es K.O. ! Utilise la commande heal.");
-      }
-
-      const cd = cooldown("attack", 60000);
+      const cd = checkCooldown("attack", 60000);
 
       if (!cd.success) {
         return message.reply(
-          `⏳ Attends ${formatTime(cd.remaining)} avant de combattre à nouveau.`
+          `⏳ Attends ${formatTime(cd.remaining)} avant un autre combat.`
         );
       }
 
       if (!useEnergy(2)) {
-        return message.reply("⚡ Tu n'as pas assez d'énergie.");
+        return message.reply("⚡ Il te faut 2 points d'énergie.");
       }
+
+      setCooldown("attack");
 
       const weaponAttack = g.weapon
         ? SHOP[g.weapon]?.attack || 0
@@ -655,160 +916,71 @@ async function makeGangRanking(players, currentPlayer) {
         random(15, 30) + weaponAttack - targetDefense
       );
 
-      targetGang.health = Math.max(
-        0,
-        targetGang.health - damage
-      );
+      targetGang.health = Math.max(0, targetGang.health - damage);
 
       g.exp += 25;
       g.reputation += 5;
 
+      const attackerName = await getName(uid);
+      const defenderName = await getName(targetID);
+
+      const attackerAvatar = await getAvatar(uid);
+      const defenderAvatar = await getAvatar(targetID);
+
+      const battleImage = await makeBattleImage(
+        {
+          name: attackerName,
+          avatar: attackerAvatar,
+          rank: getRank(g.exp).name,
+          health: g.health
+        },
+        {
+          name: defenderName,
+          avatar: defenderAvatar,
+          rank: getRank(targetGang.exp).name,
+          health: targetGang.health,
+          damage
+        }
+      );
+
       await save(uid, user);
       await save(targetID, targetUser);
 
-      const targetName = await getName(targetID);
-
-      return message.reply(
-        `𓆩 ⚔️ DARK CITY FIGHT ⚔️ 𓆪\n\n` +
-        `🥊 Adversaire : ${targetName}\n` +
-        `💥 Dégâts infligés : ${damage}\n` +
-        `❤️ Santé restante de l'adversaire : ${targetGang.health}/100\n` +
-        `⭐ EXP : +25\n` +
-        `🔥 Réputation : +5\n\n` +
+      return sendImage(
+        battleImage,
+        `battle_${uid}_${targetID}.png`,
+        `𓆩 ⚔️ DARK CITY BATTLE ⚔️ 𓆪\n\n` +
+        `🥊 ${attackerName} attaque ${defenderName} !\n` +
+        `💥 Dégâts infligés : ${damage} PV\n` +
+        `❤️ Santé restante de ${defenderName} : ${targetGang.health}/100\n` +
         (targetGang.health <= 0
-          ? "☠️ Ton adversaire est K.O. !"
-          : "⚔️ Le combat continue...")
+          ? `\n☠️ ${defenderName} est K.O. !`
+          : "")
       );
-    }
-
-    // HEAL
-    if (action === "heal" || action === "soin") {
-      if (g.health >= 100) {
-        return message.reply("❤️ Ta santé est déjà au maximum.");
-      }
-
-      const price = 300;
-
-      if (g.cash < price) {
-        return message.reply(
-          `❌ Il te faut ${price} ${COIN} pour acheter un soin.`
-        );
-      }
-
-      const restored = Math.min(30, 100 - g.health);
-
-      g.cash -= price;
-      g.health += restored;
-
-      await save();
-
-      return message.reply(
-        `𓆩 ❤️ SOINS DARK CITY ❤️ 𓆪\n\n` +
-        `✅ Tu as récupéré ${restored} points de santé.\n` +
-        `❤️ Santé : ${g.health}/100\n` +
-        `💸 Prix : ${price} ${COIN}`
-      );
-    }
-
-    // MISSION
-    if (action === "mission" || action === "missions") {
-      const cd = cooldown("mission", 120000);
-
-      if (!cd.success) {
-        return message.reply(
-          `⏳ Attends ${formatTime(cd.remaining)} avant ta prochaine mission.`
-        );
-      }
-
-      if (!useEnergy(2)) {
-        return message.reply("⚡ Tu n'as pas assez d'énergie.");
-      }
-
-      const mission = MISSIONS[random(0, MISSIONS.length - 1)];
-      const reward = random(mission.min, mission.max);
-
-      g.cash += reward;
-      g.exp += mission.exp;
-      g.reputation += 3;
-
-      await save();
-
-      return message.reply(
-        `𓆩 🎯 MISSION ACCOMPLIE 🎯 𓆪\n\n` +
-        `📌 Mission : ${mission.name}\n` +
-        `💰 Récompense : +${reward} ${COIN}\n` +
-        `⭐ EXP : +${mission.exp}\n` +
-        `🔥 Réputation : +3\n` +
-        `⚡ Énergie : ${g.energy}/10`
-      );
-    }
-
-    // DAILY
-    if (action === "daily" || action === "quotidien") {
-      const now = Date.now();
-      const remaining = 86400000 - (now - g.lastDaily);
-
-      if (remaining > 0) {
-        return message.reply(
-          `⏳ Tu as déjà récupéré ta récompense quotidienne.\nReviens dans ${formatTime(remaining)}.`
-        );
-      }
-
-      const reward = random(500, 1200);
-      const exp = random(20, 50);
-
-      g.cash += reward;
-      g.exp += exp;
-      g.reputation += 10;
-      g.lastDaily = now;
-
-      await save();
-
-      return message.reply(
-        `𓆩 🎁 DAILY REWARD 🎁 𓆪\n\n` +
-        `💰 Récompense : +${reward} ${COIN}\n` +
-        `⭐ EXP : +${exp}\n` +
-        `🔥 Réputation : +10\n\n` +
-        `Reviens demain pour ta prochaine récompense !`
-      );
-  }    // SHOP
+        }    // BOUTIQUE AVEC IMAGE
     if (action === "shop" || action === "boutique") {
-      let text = `𓆩 🛒 DARK CITY SHOP 🛒 𓆪\n\n`;
-      text += `💰 Ton argent : ${g.cash} ${COIN}\n\n`;
+      const image = await makeShopImage();
 
-      for (const [id, item] of Object.entries(SHOP)) {
-        text +=
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `📦 ${item.name}\n` +
-          `🆔 ID : ${id}\n` +
-          `💵 Prix : ${item.price} ${COIN}\n`;
-
-        if (item.type === "weapon") {
-          text += `⚔️ Attaque : +${item.attack}\n`;
-        } else {
-          text += `🛡️ Défense : +${item.defense}\n`;
-        }
-
-        text += "\n";
-      }
-
-      text +=
-        `━━━━━━━━━━━━━━━━━━\n` +
-        `🛍️ Pour acheter : ${prefix}gang buy <ID>\n` +
-        `Exemple : ${prefix}gang buy pistol`;
-
-      return message.reply(text);
+      return sendImage(
+        image,
+        "darkcity_shop.png",
+        `𓆩 🛒 DARK CITY BLACK MARKET 🛒 𓆪\n\n` +
+        `💰 Ton argent : ${g.cash} ${COIN}\n\n` +
+        `Pour acheter un objet :\n` +
+        `${prefix}gang buy <ID>\n\n` +
+        `Exemple : ${prefix}gang buy pistol`
+      );
     }
 
-    // BUY
+    // ACHETER
     if (action === "buy" || action === "acheter") {
       const itemID = (args[1] || "").toLowerCase();
       const item = SHOP[itemID];
 
       if (!item) {
         return message.reply(
-          `❌ Objet introuvable !\n\n` +
-          `Consulte la boutique avec : ${prefix}gang shop`
+          `❌ Objet introuvable.\n` +
+          `Consulte la boutique : ${prefix}gang shop`
         );
       }
 
@@ -818,9 +990,9 @@ async function makeGangRanking(players, currentPlayer) {
 
       if (g.cash < item.price) {
         return message.reply(
-          `❌ Tu n'as pas assez d'argent.\n` +
-          `💰 Prix : ${item.price} ${COIN}\n` +
-          `💵 Ton argent : ${g.cash} ${COIN}`
+          `❌ Pas assez d'argent.\n` +
+          `Prix : ${item.price} ${COIN}\n` +
+          `Ton argent : ${g.cash} ${COIN}`
         );
       }
 
@@ -830,22 +1002,22 @@ async function makeGangRanking(players, currentPlayer) {
       let equipped = false;
 
       if (item.type === "weapon") {
-        const currentAttack = g.weapon
+        const current = g.weapon
           ? SHOP[g.weapon]?.attack || 0
           : 0;
 
-        if (item.attack > currentAttack) {
+        if (item.attack > current) {
           g.weapon = itemID;
           equipped = true;
         }
       }
 
       if (item.type === "armor") {
-        const currentDefense = g.armor
+        const current = g.armor
           ? SHOP[g.armor]?.defense || 0
           : 0;
 
-        if (item.defense > currentDefense) {
+        if (item.defense > current) {
           g.armor = itemID;
           equipped = true;
         }
@@ -855,54 +1027,43 @@ async function makeGangRanking(players, currentPlayer) {
 
       return message.reply(
         `𓆩 🛍️ ACHAT RÉUSSI 🛍️ 𓆪\n\n` +
-        `✅ Objet acheté : ${item.name}\n` +
+        `${item.emoji} Objet : ${item.name}\n` +
         `💸 Prix : ${item.price} ${COIN}\n` +
-        `💰 Argent restant : ${g.cash} ${COIN}\n\n` +
+        `💰 Argent restant : ${g.cash} ${COIN}\n` +
         (equipped
-          ? "🟢 L'objet a été automatiquement équipé."
-          : "📦 L'objet a été ajouté à ton inventaire.")
+          ? "🟢 Objet automatiquement équipé."
+          : "📦 Objet ajouté à ton inventaire.")
       );
     }
 
-    // INVENTORY
+    // INVENTAIRE
     if (action === "inventory" || action === "inventaire") {
       let text = `𓆩 🎒 DARK CITY INVENTORY 🎒 𓆪\n\n`;
 
       text += `💰 Argent : ${g.cash} ${COIN}\n`;
-      text += `⚔️ Arme équipée : ${
-        g.weapon ? getItemName(g.weapon) : "Aucune"
-      }\n`;
+      text += `⚔️ Arme : ${getItemName(g.weapon)}\n`;
+      text += `🛡️ Protection : ${getItemName(g.armor)}\n\n`;
 
-      text += `🛡️ Protection équipée : ${
-        g.armor ? getItemName(g.armor) : "Aucune"
-      }\n\n`;
-
-      text += `📦 OBJETS POSSÉDÉS\n\n`;
-
-      if (g.inventory.length === 0) {
-        text += "Ton inventaire est vide.\n";
+      if (!g.inventory.length) {
+        text += "Ton inventaire est vide.";
       } else {
-        for (const itemID of g.inventory) {
-          const item = SHOP[itemID];
+        for (const id of g.inventory) {
+          const item = SHOP[id];
 
           if (!item) continue;
 
-          const equipped =
-            g.weapon === itemID || g.armor === itemID;
+          const equipped = g.weapon === id || g.armor === id;
 
-          text +=
-            `• ${item.name}` +
-            (equipped ? " 🟢 ÉQUIPÉ" : "") +
-            "\n";
+          text += `${item.emoji} ${item.name}`;
+          if (equipped) text += " 🟢 ÉQUIPÉ";
+          text += "\n";
         }
       }
-
-      text += `\n🛒 Boutique : ${prefix}gang shop`;
 
       return message.reply(text);
     }
 
-    // TOP / RANKING
+    // CLASSEMENT DES JOUEURS
     if (
       action === "top" ||
       action === "ranking" ||
@@ -926,49 +1087,536 @@ async function makeGangRanking(players, currentPlayer) {
         for (const [id, data] of entries) {
           if (!id || !data) continue;
 
-          const gang = getGang(data);
+          const playerGang = getGangData(data);
 
           players.push({
             id,
             name: await getName(id),
-            cash: gang.cash || 0,
-            exp: gang.exp || 0,
-            reputation: gang.reputation || 0
+            exp: playerGang.exp || 0,
+            cash: playerGang.cash || 0
           });
         }
 
         players.sort((a, b) => b.exp - a.exp);
 
-        const image = await makeGangRanking(players, uid);
-        const filePath = path.join(DATA_DIR, "ranking.png");
-
-        fs.writeFileSync(filePath, image);
-
+        const image = await makeRankingImage(players);
         const myRank = players.findIndex(p => p.id === uid) + 1;
 
-        return message.reply({
-          body:
-            `𓆩 🏆 DARK CITY RANKING 🏆 𓆪\n\n` +
-            `👥 Joueurs classés : ${players.length}\n` +
-            `👑 Ton classement : ${
-              myRank > 0 ? `#${myRank}` : "Non classé"
-            }\n\n` +
-            `Voici le TOP 10 des gangsters les plus puissants.`,
-          attachment: fs.createReadStream(filePath)
-        });
+        return sendImage(
+          image,
+          "darkcity_ranking.png",
+          `𓆩 🏆 DARK CITY RANKING 🏆 𓆪\n\n` +
+          `👥 Joueurs classés : ${players.length}\n` +
+          `👑 Ton classement : ${myRank ? `#${myRank}` : "Non classé"}`
+        );
       } catch (error) {
-        console.error("DARK CITY RANKING ERROR:", error);
+        console.error("DARK CITY RANKING:", error);
 
         return message.reply(
-          "❌ Une erreur est survenue pendant la création du classement."
+          "❌ Impossible de générer le classement."
         );
       }
     }
 
-    // HELP / MENU
-    const help =
+    // SYSTÈME DE GUILDES
+    if (action === "guild" || action === "guilde") {
+      const sub = (args[1] || "help").toLowerCase();
+      const guildData = loadGuildData();
+
+      const findMyGuild = () => {
+        return Object.values(guildData.guilds).find(guild =>
+          guild.members.some(member => member.id === uid)
+        );
+      };
+
+      const getMember = (guild, id) => {
+        return guild.members.find(member => member.id === id);
+      };
+
+      const getGuildByName = name => {
+        const wanted = name.toLowerCase();
+
+        return Object.values(guildData.guilds).find(
+          guild => guild.name.toLowerCase() === wanted
+        );
+      };
+
+      // CRÉER UNE GUILDE
+      if (sub === "create" || sub === "creer" || sub === "créer") {
+        const guildName = args.slice(2).join(" ").trim();
+
+        if (!guildName) {
+          return message.reply(
+            `Utilisation : ${prefix}gang guild create <nom>`
+          );
+        }
+
+        if (guildName.length < 3 || guildName.length > 25) {
+          return message.reply(
+            "❌ Le nom doit contenir entre 3 et 25 caractères."
+          );
+        }
+
+        if (findMyGuild()) {
+          return message.reply(
+            "❌ Tu appartiens déjà à une guilde."
+          );
+        }
+
+        if (getGuildByName(guildName)) {
+          return message.reply(
+            "❌ Ce nom de guilde est déjà utilisé."
+          );
+        }
+
+        if (g.cash < 2000) {
+          return message.reply(
+            `❌ Créer une guilde coûte 2000 ${COIN}.\n` +
+            `Ton argent : ${g.cash} ${COIN}`
+          );
+        }
+
+        const id = `DC${Date.now()}${random(100, 999)}`;
+
+        guildData.guilds[id] = {
+          id,
+          name: guildName,
+          leader: uid,
+          deputy: null,
+          members: [
+            {
+              id: uid,
+              role: "leader",
+              joinedAt: Date.now()
+            }
+          ],
+          level: 1,
+          exp: 0,
+          reputation: 0,
+          createdAt: Date.now()
+        };
+
+        g.cash -= 2000;
+
+        saveGuildData(guildData);
+        await save();
+
+        return message.reply(
+          `𓆩 🔱 GUILDE CRÉÉE 🔱 𓆪\n\n` +
+          `🏴 Nom : ${guildName}\n` +
+          `👑 Chef : ${await getName(uid)}\n` +
+          `👥 Membres : 1\n` +
+          `⭐ Niveau : 1\n` +
+          `💸 Coût : 2000 ${COIN}\n\n` +
+          `Ta guilde est maintenant créée !`
+        );
+      }
+
+      // REJOINDRE UNE GUILDE
+      if (sub === "join" || sub === "rejoindre") {
+        const guildName = args.slice(2).join(" ").trim();
+
+        if (!guildName) {
+          return message.reply(
+            `Utilisation : ${prefix}gang guild join <nom>`
+          );
+        }
+
+        if (findMyGuild()) {
+          return message.reply(
+            "❌ Tu appartiens déjà à une guilde. Quitte-la avant d'en rejoindre une autre."
+          );
+        }
+
+        const guild = getGuildByName(guildName);
+
+        if (!guild) {
+          return message.reply("❌ Cette guilde n'existe pas.");
+        }
+
+        if (guild.members.length >= 30) {
+          return message.reply("❌ Cette guilde est complète.");
+        }
+
+        if (!guildData.invites[uid]?.includes(guild.id)) {
+          return message.reply(
+            "❌ Tu n'as pas reçu d'invitation de cette guilde."
+          );
+        }
+
+        guild.members.push({
+          id: uid,
+          role: "member",
+          joinedAt: Date.now()
+        });
+
+        guildData.invites[uid] =
+          guildData.invites[uid].filter(id => id !== guild.id);
+
+        saveGuildData(guildData);
+
+        return message.reply(
+          `𓆩 🏴 BIENVENUE DANS LA GUILDE 🏴 𓆪\n\n` +
+          `Tu as rejoint : ${guild.name}\n` +
+          `👥 Membres : ${guild.members.length}/30`
+        );
+      }
+
+      // QUITTER UNE GUILDE
+      if (sub === "leave" || sub === "quitter") {
+        const guild = findMyGuild();
+
+        if (!guild) {
+          return message.reply("❌ Tu ne fais partie d'aucune guilde.");
+        }
+
+        if (guild.leader === uid) {
+          return message.reply(
+            "❌ Le chef ne peut pas quitter sa guilde. Transfère d'abord le leadership ou dissous la guilde."
+          );
+        }
+
+        guild.members = guild.members.filter(member => member.id !== uid);
+
+        if (guild.deputy === uid) {
+          guild.deputy = null;
+        }
+
+        saveGuildData(guildData);
+
+        return message.reply(
+          `Tu as quitté la guilde ${guild.name}.`
+        );
+      }
+
+      // INFORMATIONS DE LA GUILDE
+      if (sub === "info" || sub === "infos") {
+        const guild = findMyGuild();
+
+        if (!guild) {
+          return message.reply("❌ Tu ne fais partie d'aucune guilde.");
+        }
+
+        return message.reply(
+          `𓆩 🏴 ${guild.name.toUpperCase()} 🏴 𓆪\n\n` +
+          `👑 Chef : ${await getName(guild.leader)}\n` +
+          `🔱 Sous-chef : ${
+            guild.deputy
+              ? await getName(guild.deputy)
+              : "Aucun"
+          }\n` +
+          `👥 Membres : ${guild.members.length}/30\n` +
+          `⭐ Niveau : ${guild.level}\n` +
+          `🔥 EXP de guilde : ${guild.exp}\n` +
+          `🏆 Réputation : ${guild.reputation}\n\n` +
+          `📅 Création : ${new Date(guild.createdAt).toLocaleDateString("fr-FR")}`
+        );
+      }
+
+      // LISTE DES MEMBRES
+      if (sub === "members" || sub === "membres") {
+        const guild = findMyGuild();
+
+        if (!guild) {
+          return message.reply("❌ Tu ne fais partie d'aucune guilde.");
+        }
+
+        let text = `𓆩 👥 MEMBRES DE ${guild.name.toUpperCase()} 👥 𓆪\n\n`;
+
+        for (let i = 0; i < guild.members.length; i++) {
+          const member = guild.members[i];
+
+          let role = "Membre";
+
+          if (member.id === guild.leader) role = "👑 Chef";
+          else if (member.id === guild.deputy) role = "🔱 Sous-chef";
+
+          text += `${i + 1}. ${await getName(member.id)}\n`;
+          text += `   ${role}\n\n`;
+        }
+
+        return message.reply(text);
+      }
+
+      // INVITER UN JOUEUR
+      if (sub === "invite" || sub === "inviter") {
+        const guild = findMyGuild();
+        const targetID = getTarget();
+
+        if (!guild) {
+          return message.reply("❌ Tu ne fais partie d'aucune guilde.");
+        }
+
+        const member = getMember(guild, uid);
+
+        if (
+          guild.leader !== uid &&
+          guild.deputy !== uid
+        ) {
+          return message.reply(
+            "❌ Seuls le chef et le sous-chef peuvent inviter."
+          );
+        }
+
+        if (!targetID) {
+          return message.reply(
+            `Réponds au message du joueur ou mentionne-le.\n` +
+            `Exemple : ${prefix}gang guild invite @joueur`
+          );
+        }
+
+        if (getMember(guild, targetID)) {
+          return message.reply("Ce joueur est déjà dans ta guilde.");
+        }
+
+        if (guild.members.length >= 30) {
+          return message.reply("❌ Ta guilde est complète.");
+        }
+
+        const targetUser = await usersData.get(targetID);
+
+        if (!targetUser) {
+          return message.reply("❌ Joueur introuvable.");
+        }
+
+        const targetGang = getGangData(targetUser);
+
+        const targetGuild = Object.values(guildData.guilds).find(item =>
+          item.members.some(m => m.id === targetID)
+        );
+
+        if (targetGuild) {
+          return message.reply("Ce joueur appartient déjà à une guilde.");
+        }
+
+        guildData.invites[targetID] ||= [];
+
+        if (!guildData.invites[targetID].includes(guild.id)) {
+          guildData.invites[targetID].push(guild.id);
+        }
+
+        saveGuildData(guildData);
+
+        return message.reply(
+          `✉️ Invitation envoyée à ${await getName(targetID)}.\n\n` +
+          `Il doit utiliser :\n` +
+          `${prefix}gang guild join ${guild.name}`
+        );
+      }
+
+      // EXPULSER UN MEMBRE
+      if (sub === "kick" || sub === "expulser") {
+        const guild = findMyGuild();
+        const targetID = getTarget();
+
+        if (!guild) {
+          return message.reply("❌ Tu ne fais partie d'aucune guilde.");
+        }
+
+        if (guild.leader !== uid && guild.deputy !== uid) {
+          return message.reply(
+            "❌ Seuls le chef et le sous-chef peuvent expulser."
+          );
+        }
+
+        if (!targetID) {
+          return message.reply(
+            `Réponds au joueur à expulser ou mentionne-le.`
+          );
+        }
+
+        if (targetID === guild.leader) {
+          return message.reply("❌ Impossible d'expulser le chef.");
+        }
+
+        if (guild.deputy === uid && targetID === guild.deputy) {
+          return message.reply("❌ Action impossible.");
+        }
+
+        const targetMember = getMember(guild, targetID);
+
+        if (!targetMember) {
+          return message.reply("Ce joueur ne fait pas partie de ta guilde.");
+        }
+
+        guild.members = guild.members.filter(m => m.id !== targetID);
+
+        if (guild.deputy === targetID) {
+          guild.deputy = null;
+        }
+
+        saveGuildData(guildData);
+
+        return message.reply(
+          `🚪 ${await getName(targetID)} a été expulsé de ${guild.name}.`
+        );
+      }
+
+      // NOMMER UN SOUS-CHEF
+      if (sub === "promote" || sub === "promouvoir") {
+        const guild = findMyGuild();
+        const targetID = getTarget();
+
+        if (!guild) {
+          return message.reply("❌ Tu ne fais partie d'aucune guilde.");
+        }
+
+        if (guild.leader !== uid) {
+          return message.reply(
+            "❌ Seul le chef peut nommer un sous-chef."
+          );
+        }
+
+        if (!targetID) {
+          return message.reply(
+            "Réponds au joueur ou mentionne-le."
+          );
+        }
+
+        if (targetID === uid) {
+          return message.reply("Tu es déjà le chef.");
+        }
+
+        if (!getMember(guild, targetID)) {
+          return message.reply(
+            "Ce joueur ne fait pas partie de ta guilde."
+          );
+        }
+
+        guild.deputy = targetID;
+        saveGuildData(guildData);
+
+        return message.reply(
+          `🔱 ${await getName(targetID)} est maintenant le sous-chef de ${guild.name} !`
+        );
+      }
+
+      // TRANSFÉRER LE LEADERSHIP
+      if (sub === "transfer" || sub === "transfert") {
+        const guild = findMyGuild();
+        const targetID = getTarget();
+
+        if (!guild) {
+          return message.reply("❌ Tu ne fais partie d'aucune guilde.");
+        }
+
+        if (guild.leader !== uid) {
+          return message.reply(
+            "❌ Seul le chef actuel peut transférer le leadership."
+          );
+        }
+
+        if (!targetID) {
+          return message.reply(
+            "Réponds au joueur qui doit devenir chef ou mentionne-le."
+          );
+        }
+
+        if (!getMember(guild, targetID)) {
+          return message.reply(
+            "Ce joueur ne fait pas partie de ta guilde."
+          );
+        }
+
+        guild.leader = targetID;
+        guild.deputy = uid;
+
+        for (const member of guild.members) {
+          if (member.id === targetID) member.role = "leader";
+          else if (member.id === uid) member.role = "deputy";
+          else member.role = "member";
+        }
+
+        saveGuildData(guildData);
+
+        return message.reply(
+          `👑 ${await getName(targetID)} est le nouveau chef de ${guild.name} !\n` +
+          `🔱 Tu deviens son sous-chef.`
+        );
+      }
+
+      // DISSoudre LA GUILDE
+      if (sub === "delete" || sub === "dissoudre") {
+        const guild = findMyGuild();
+
+        if (!guild) {
+          return message.reply("❌ Tu ne fais partie d'aucune guilde.");
+        }
+
+        if (guild.leader !== uid) {
+          return message.reply("❌ Seul le chef peut dissoudre la guilde.");
+        }
+
+        delete guildData.guilds[guild.id];
+
+        for (const [memberID, invitations] of Object.entries(guildData.invites)) {
+          guildData.invites[memberID] = invitations.filter(id => id !== guild.id);
+        }
+
+        saveGuildData(guildData);
+
+        return message.reply(
+          `💀 La guilde ${guild.name} a été dissoute par son chef.`
+        );
+      }
+
+      // CLASSEMENT DES GUILDES
+      if (sub === "top" || sub === "ranking") {
+        const guilds = Object.values(guildData.guilds)
+          .sort((a, b) => b.reputation - a.reputation)
+          .slice(0, 10);
+
+        if (!guilds.length) {
+          return message.reply("Aucune guilde n'a encore été créée.");
+        }
+
+        let text = "𓆩 🏆 TOP GUILDES DARK CITY 🏆 𓆪\n\n";
+
+        for (let i = 0; i < guilds.length; i++) {
+          const guild = guilds[i];
+
+          text +=
+            `${i + 1}. 🏴 ${guild.name}\n` +
+            `   👑 Chef : ${await getName(guild.leader)}\n` +
+            `   👥 Membres : ${guild.members.length}\n` +
+            `   🔥 Réputation : ${guild.reputation}\n\n`;
+        }
+
+        return message.reply(text);
+      }
+
+      // AIDE GUILDE
+      return message.reply(
+        `𓆩 🏴 DARK CITY GUILDS 🏴 𓆪\n\n` +
+        `Création :\n` +
+        `${prefix}gang guild create <nom>\n\n` +
+        `Rejoindre :\n` +
+        `${prefix}gang guild join <nom>\n\n` +
+        `Quitter :\n` +
+        `${prefix}gang guild leave\n\n` +
+        `Informations :\n` +
+        `${prefix}gang guild info\n\n` +
+        `Membres :\n` +
+        `${prefix}gang guild members\n\n` +
+        `Inviter :\n` +
+        `${prefix}gang guild invite @joueur\n\n` +
+        `Expulser :\n` +
+        `${prefix}gang guild kick @joueur\n\n` +
+        `Nommer un sous-chef :\n` +
+        `${prefix}gang guild promote @joueur\n\n` +
+        `Transférer le leadership :\n` +
+        `${prefix}gang guild transfer @joueur\n\n` +
+        `Dissoudre :\n` +
+        `${prefix}gang guild delete\n\n` +
+        `Classement :\n` +
+        `${prefix}gang guild top`
+      );
+    }
+
+    // MENU PRINCIPAL
+    return message.reply(
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `𓆩 🦇 𝐃𝐀𝐑𝐊 𝐂𝐈𝐓𝐘 🦇 𓆪\n` +
+      `𓆩 🦇 𝐃𝐀𝐑𝐊 𝐂𝐈𝐓𝐘 𝟑.𝟎 🦇 𓆪\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
 
       `👤 PROFIL\n` +
@@ -991,18 +1639,24 @@ async function makeGangRanking(players, currentPlayer) {
       `┊ ${prefix}gang buy <ID>\n` +
       `┊ ${prefix}gang inventory\n\n` +
 
+      `🏴 GUILDES\n` +
+      `┊ ${prefix}gang guild\n` +
+      `┊ ${prefix}gang guild create <nom>\n` +
+      `┊ ${prefix}gang guild info\n` +
+      `┊ ${prefix}gang guild members\n` +
+      `┊ ${prefix}gang guild top\n\n` +
+
       `🏆 CLASSEMENT\n` +
       `┊ ${prefix}gang top\n\n` +
 
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `💰 Mon argent : ${g.cash} ${COIN}\n` +
-      `⭐ Mon EXP : ${g.exp}\n` +
-      `👑 Mon rang : ${getRank(g.exp).name}\n` +
-      `❤️ Ma santé : ${g.health}/100\n` +
-      `⚡ Mon énergie : ${g.energy}/10\n` +
+      `💰 Argent : ${g.cash} ${COIN}\n` +
+      `⭐ EXP : ${g.exp}\n` +
+      `👑 Grade : ${getRank(g.exp).name}\n` +
+      `❤️ Santé : ${g.health}/100\n` +
+      `⚡ Énergie : ${g.energy}/10\n` +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `𓆩 DARK CITY GANG 𓆪`;
-
-    return message.reply(help);
+      `𓆩 DARK CITY GANG 𓆪`
+    );
   }
 };
