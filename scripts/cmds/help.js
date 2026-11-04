@@ -1,4 +1,3 @@
-
 const { commands } = global.GoatBot;
 const config = global.GoatBot.config;
 const fonts = require("../func/fonts.js");
@@ -30,13 +29,23 @@ const CATEGORY_DESIGNS = {
 };
 
 const CATEGORY_ICONS = {
-  admin: "⚔️", ai: "🤖", anime: "⛩️",
-  "contacts admin": "📞", download: "📥",
-  economy: "💰", fun: "🎭", game: "🎮",
-  image: "🎨", media: "🎧", owner: "👑",
-  security: "🛡️", settings: "⚙️",
-  system: "💻", tools: "🧰",
-  utility: "🔧", other: "📁"
+  admin: "⚔️",
+  ai: "🤖",
+  anime: "⛩️",
+  "contacts admin": "📞",
+  download: "📥",
+  economy: "💰",
+  fun: "🎭",
+  game: "🎮",
+  image: "🎨",
+  media: "🎧",
+  owner: "👑",
+  security: "🛡️",
+  settings: "⚙️",
+  system: "💻",
+  tools: "🧰",
+  utility: "🔧",
+  other: "📁"
 };
 
 function normalizeCategory(category) {
@@ -59,8 +68,12 @@ function buildHelpMenu() {
     }
   }
 
-  // Détection de secours pour les jeux DARK SYSTEM.
-  const gameCommands = ["devinette", "echecs"];
+  // Commandes DARK SYSTEM ajoutées à GAME & FUN.
+  const gameCommands = [
+    "gang",
+    "echecs",
+    "devinette"
+  ];
 
   for (const name of gameCommands) {
     const cmd = commands.get(name);
@@ -95,6 +108,7 @@ function buildHelpMenu() {
     }
   }
 
+  // Trier les commandes.
   for (const category of Object.keys(cats)) {
     cats[category].sort((a, b) => a.localeCompare(b));
   }
@@ -114,6 +128,7 @@ function buildHelpMenu() {
     `『 ${commands.size} 𝐂𝐎𝐌𝐌𝐀𝐍𝐃𝐄𝐒 • ${orderedCategories.length} 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐈𝐄𝐒 』`
   ].join("\n");
 
+  // Affichage des catégories.
   for (const category of orderedCategories) {
     const list = cats[category];
 
@@ -127,6 +142,7 @@ function buildHelpMenu() {
 
   const p = config.prefix || "_";
 
+  // Guide et signature du créateur.
   menu += [
     "",
     "━━━━━━━━━━━━━━━━━━━━",
@@ -136,7 +152,17 @@ function buildHelpMenu() {
     `➤ ${p}help search <mot>`,
     "━━━━━━━━━━━━━━━━━━━━",
     "☠️ 𝐃𝐄𝐕𝐄𝐋𝐎𝐏𝐄𝐃 𝐁𝐘 @𝐒𝐇𝐀𝐃𝐄 🎀",
-    "⛧ 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 𝐓𝐎 𝐓𝐇𝐄 𝐃𝐀𝐑𝐊 𝐒𝐈𝐃𝐄 ⛧"
+    "⛧ 𝐖𝐄𝐋𝐂𝐎𝐌𝐄 𝐓𝐎 𝐓𝐇𝐄 𝐃𝐀𝐑𝐊 𝐒𝐈𝐃𝐄 ⛧",
+    "",
+    "╭━━━〔 👑 𝐂𝐑𝐄𝐀𝐓𝐎𝐑 〕━━━╮",
+    "┃",
+    "┃  🩸 𝐔𝐧𝐞 𝐪𝐮𝐞𝐬𝐭𝐢𝐨𝐧 ? 𝐔𝐧 𝐩𝐫𝐨𝐛𝐥𝐞̀𝐦𝐞 ?",
+    "┃  ☠️ 𝐂𝐨𝐧𝐭𝐚𝐜𝐭𝐞 𝐦𝐨𝐧 𝐌𝐚𝐢̂𝐭𝐫𝐞 𝐨𝐮 𝐦𝐨𝐧 𝐂𝐫𝐞́𝐚𝐭𝐞𝐮𝐫.",
+    "┃",
+    "┃  🔗 𝐅𝐀𝐂𝐄𝐁𝐎𝐎𝐊 :",
+    "┃  https://www.facebook.com/profile.php?id=61595650165092",
+    "┃",
+    "╰━━━━━━〔 🖤 〕━━━━━━╯"
   ].join("\n");
 
   return {
@@ -147,6 +173,7 @@ function buildHelpMenu() {
   };
 }
 
+// Actualiser le cache du menu.
 global.GoatBot.refreshHelpMenu = function () {
   global.GoatBot.helpMenuCache = buildHelpMenu();
   return global.GoatBot.helpMenuCache;
@@ -155,7 +182,7 @@ global.GoatBot.refreshHelpMenu = function () {
 module.exports = {
   config: {
     name: "help",
-    version: "11.1",
+    version: "11.2",
     author: "Shade × Christus",
     countDown: 2,
     role: 0,
@@ -166,7 +193,7 @@ module.exports = {
   onStart: async function ({ message, args }) {
     const p = config.prefix || "_";
 
-    // RECHERCHE
+    // RECHERCHE DE COMMANDES.
     if (args[0] && args[0].toLowerCase() === "search") {
       const keyword = args.slice(1).join(" ").toLowerCase();
 
@@ -250,7 +277,7 @@ module.exports = {
       return message.reply(fonts.christus(resultMsg));
     }
 
-    // DÉTAIL D'UNE COMMANDE
+    // DÉTAIL D'UNE COMMANDE.
     if (args[0]) {
       const search = args[0].toLowerCase();
 
@@ -326,7 +353,7 @@ module.exports = {
       return message.reply(fonts.christus(detailMsg));
     }
 
-    // MENU GLOBAL : reconstruire pour afficher les commandes chargées.
+    // MENU GLOBAL.
     const data = global.GoatBot.refreshHelpMenu();
 
     return message.reply(data.menu);
