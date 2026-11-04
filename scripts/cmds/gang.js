@@ -1,4 +1,6 @@
 const Canvas = require("canvas");
+const fs = require("fs-extra");
+const path = require("path");
 
 const COIN = "₩";
 
@@ -13,994 +15,742 @@ const RANKS = [
 
 const SHOP = {
   knife: {
-    name: "🔪 Couteau",
+    name: "Couteau",
     price: 500,
+    type: "weapon",
     attack: 5
   },
   pistol: {
-    name: "🔫 Pistolet",
+    name: "Pistolet",
     price: 1500,
+    type: "weapon",
     attack: 15
   },
   armor: {
-    name: "🦺 Gilet pare-balles",
+    name: "Gilet pare-balles",
     price: 1000,
+    type: "armor",
     defense: 10
   },
   vest: {
-    name: "🛡️ Armure renforcée",
+    name: "Armure renforcée",
     price: 2500,
+    type: "armor",
     defense: 25
   }
 };
 
 const MISSIONS = [
-  {
-    name: "Livraison secrète",
-    description: "Tu as livré un colis mystérieux à un contact.",
-    min: 200,
-    max: 500,
-    exp: 20
-  },
-  {
-    name: "Protection du territoire",
-    description: "Tu as protégé ton quartier contre un gang rival.",
-    min: 300,
-    max: 600,
-    exp: 30
-  },
-  {
-    name: "Transaction clandestine",
-    description: "Tu as réalisé une transaction lucrative.",
-    min: 250,
-    max: 550,
-    exp: 25
-  },
-  {
-    name: "Infiltration",
-    description: "Tu as infiltré un territoire ennemi.",
-    min: 400,
-    max: 700,
-    exp: 35
-  },
-  {
-    name: "Dette récupérée",
-    description: "Tu as récupéré une dette auprès d'un ancien contact.",
-    min: 150,
-    max: 450,
-    exp: 15
-  }
+  { name: "Livraison secrète", min: 200, max: 500, exp: 20 },
+  { name: "Protection du territoire", min: 300, max: 600, exp: 30 },
+  { name: "Transaction clandestine", min: 250, max: 550, exp: 25 },
+  { name: "Infiltration", min: 400, max: 700, exp: 35 },
+  { name: "Dette récupérée", min: 150, max: 450, exp: 15 }
 ];
 
-// =====================================
-// DONNÉES DU JOUEUR
-// =====================================
+const DATA_DIR = path.join(__dirname, "cache", "darkcity");
+fs.ensureDirSync(DATA_DIR);
 
-function getGang(user) {
-  if (!user.data) user.data = {};
-
-  if (!user.data.darkCity) {
-    user.data.darkCity = {
-      cash: 1000,
-      exp: 0,
-      reputation: 0,
-      health: 100,
-      energy: 10,
-      inventory: [],
-      weapon: null,
-      armor: null,
-      lastActions: {},
-      lastDaily: 0,
-      lastEnergy: Date.now()
-    };
-  }
-
-  const g = user.data.darkCity;
-
-  g.cash ??= 1000;
-  g.exp ??= 0;
-  g.reputation ??= 0;
-  g.health ??= 100;
-  g.energy ??= 10;
-  g.inventory ??= [];
-  g.weapon ??= null;
-  g.armor ??= null;
-  g.lastActions ??= {};
-  g.lastDaily ??= 0;
-  g.lastEnergy ??= Date.now();
-
-  // Récupération automatique d'énergie
-  const now = Date.now();
-  const recovered = Math.floor(
-    (now - g.lastEnergy) / 600000
-  );
-
-  if (recovered > 0) {
-    g.energy = Math.min(10, g.energy + recovered);
-    g.lastEnergy += recovered * 600000;
-  }
-
-  return g;
+function random(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
-
-// =====================================
-// FONCTIONS UTILITAIRES
-// =====================================
 
 function getRank(exp) {
   let rank = RANKS[0];
 
-  for (const r of RANKS) {
-    if (exp >= r.exp) rank = r;
+  for (const item of RANKS) {
+    if (exp >= item.exp) rank = item;
   }
 
-  return rank.name;
-}
-
-function random(min, max) {
-  return Math.floor(
-    Math.random() * (max - min + 1)
-  ) + min;
+  return rank;
 }
 
 function formatTime(ms) {
-  const minutes = Math.ceil(ms / 60000);
+  const seconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
 
-  if (minutes >= 60) {
-    return `${Math.floor(minutes / 60)}h ${minutes % 60}min`;
+  if (minutes > 0) return `${minutes} min ${remaining} sec`;
+  return `${remaining} sec`;
+}
+
+function getItemName(id) {
+  return SHOP[id]?.name || id;
+}
+
+function getPrefix() {
+  const configuredPrefix = global.GoatBot?.config?.prefix;
+
+  if (Array.isArray(configuredPrefix)) {
+    return configuredPrefix[0] || "/";
   }
 
-  return `${minutes}min`;
+  return configuredPrefix || "/";
 }
 
-function getItemName(key) {
-  return SHOP[key]?.name || "Aucun";
+function roundedRect(ctx, x, y, width, height, radius, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(
+    x + width,
+    y + height,
+    x + width - radius,
+    y + height
+  );
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
 }
 
-// =====================================
-// GÉNÉRATION DE LA CARTE DE CLASSEMENT
-// =====================================
-
-async function makeGangRanking(players, currentPlayer) {
-
-  const width = 1536;
-  const height = 900;
-
-  const canvas = Canvas.createCanvas(width, height);
+async function makeGangProfile(user, name, avatarURL) {
+  const canvas = Canvas.createCanvas(1200, 1450);
   const ctx = canvas.getContext("2d");
 
-  // FOND PRINCIPAL
-  const bg = ctx.createLinearGradient(
-    0, 0, width, height
-  );
+  const gradient = ctx.createLinearGradient(0, 0, 1200, 1450);
+  gradient.addColorStop(0, "#080d0b");
+  gradient.addColorStop(0.5, "#102019");
+  gradient.addColorStop(1, "#050807");
 
-  bg.addColorStop(0, "#001006");
-  bg.addColorStop(0.5, "#000900");
-  bg.addColorStop(1, "#001408");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 1200, 1450);
 
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "#19ff8c";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(25, 25, 1150, 1400);
 
-  // EFFET DE FOND
-  for (let i = 0; i < 35; i++) {
-    ctx.fillStyle = "rgba(0,255,80,0.025)";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#19ff8c";
+  ctx.font = "bold 65px Arial";
+  ctx.fillText("DARK CITY", 600, 110);
 
-    ctx.fillRect(
-      random(0, width),
-      random(0, height),
-      random(2, 5),
-      random(2, 5)
-    );
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 34px Arial";
+  ctx.fillText("GANGSTER PROFILE", 600, 165);
+
+  roundedRect(ctx, 390, 210, 420, 420, 30, "#111c16", "#19ff8c");
+
+  if (avatarURL) {
+    try {
+      const avatar = await Canvas.loadImage(avatarURL);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(600, 420, 170, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(avatar, 430, 250, 340, 340);
+      ctx.restore();
+    } catch (error) {
+      ctx.fillStyle = "#19ff8c";
+      ctx.font = "bold 150px Arial";
+      ctx.fillText((name || "?").charAt(0).toUpperCase(), 600, 475);
+    }
+  } else {
+    ctx.fillStyle = "#19ff8c";
+    ctx.font = "bold 150px Arial";
+    ctx.fillText((name || "?").charAt(0).toUpperCase(), 600, 475);
   }
 
-  // BORDURE NÉON
-  ctx.save();
+  const rank = getRank(user.exp || 0);
+  const nextRank = RANKS.find(r => r.exp > (user.exp || 0));
+  const currentExp = user.exp || 0;
 
-  ctx.shadowColor = "#39ff70";
-  ctx.shadowBlur = 20;
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 48px Arial";
+  ctx.fillText(name || "Joueur inconnu", 600, 710);
 
-  ctx.strokeStyle = "#39ff70";
-  ctx.lineWidth = 3;
+  ctx.fillStyle = "#19ff8c";
+  ctx.font = "bold 36px Arial";
+  ctx.fillText(rank.name, 600, 770);
 
-  ctx.strokeRect(
-    18,
-    18,
-    width - 36,
-    height - 36
+  roundedRect(ctx, 100, 820, 1000, 35, 15, "#26352d");
+
+  const progress = nextRank
+    ? Math.min(1, currentExp / nextRank.exp)
+    : 1;
+
+  roundedRect(
+    ctx,
+    100,
+    820,
+    Math.max(10, 1000 * progress),
+    35,
+    15,
+    "#19ff8c"
   );
 
-  ctx.restore();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "26px Arial";
+  ctx.fillText(
+    nextRank
+      ? `${currentExp} / ${nextRank.exp} EXP`
+      : `${currentExp} EXP - RANG MAXIMUM`,
+    600,
+    900
+  );
 
-  // COINS DÉCORATIFS
-  ctx.strokeStyle = "#8affaa";
-  ctx.lineWidth = 4;
-
-  const corners = [
-    [18, 18, 45, 0, 0, 45],
-    [width - 18, 18, -45, 0, 0, 45],
-    [18, height - 18, 45, 0, 0, -45],
-    [width - 18, height - 18, -45, 0, 0, -45]
+  const stats = [
+    ["FORTUNE", `${user.cash || 0} ${COIN}`],
+    ["RÉPUTATION", `${user.reputation || 0}`],
+    ["SANTÉ", `${user.health || 0} / 100`],
+    ["ÉNERGIE", `${user.energy || 0} / 10`],
+    ["ARME", user.weapon ? getItemName(user.weapon) : "Aucune"],
+    ["PROTECTION", user.armor ? getItemName(user.armor) : "Aucune"]
   ];
 
-  for (const [x, y, dx, , , dy] of corners) {
-    ctx.beginPath();
-    ctx.moveTo(x + dx, y);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x, y + dy);
-    ctx.stroke();
-  }
+  let y = 980;
 
-  // TITRE
-  ctx.shadowColor = "#00ff55";
-  ctx.shadowBlur = 18;
+  for (let i = 0; i < stats.length; i++) {
+    const x = i % 2 === 0 ? 100 : 620;
+    if (i % 2 === 0 && i !== 0) y += 125;
 
-  ctx.fillStyle = "#00ff55";
-  ctx.font = "bold 48px Arial";
-
-  ctx.fillText("DARK CITY", 65, 85);
-
-  ctx.shadowBlur = 0;
-
-  ctx.fillStyle = "#b5ffc8";
-  ctx.font = "bold 22px Arial";
-
-  ctx.fillText(
-    "GLOBAL GANGSTER RANKING",
-    65,
-    125
-  );
-
-  ctx.fillStyle = "#55ff88";
-  ctx.font = "16px Arial";
-
-  ctx.fillText(
-    "THE MOST POWERFUL PLAYERS IN DARK CITY",
-    65,
-    165
-  );
-
-  // DATE
-  ctx.textAlign = "right";
-  ctx.fillStyle = "#65d985";
-  ctx.font = "16px Arial";
-
-  ctx.fillText(
-    new Date().toLocaleString("fr-FR"),
-    1460,
-    85
-  );
-
-  ctx.textAlign = "left";
-
-  // SÉPARATION
-  ctx.strokeStyle = "#155d2b";
-  ctx.lineWidth = 2;
-
-  ctx.beginPath();
-  ctx.moveTo(65, 195);
-  ctx.lineTo(1465, 195);
-  ctx.stroke();
-
-  // TITRE DU CLASSEMENT
-  ctx.fillStyle = "#00ff55";
-  ctx.font = "bold 28px Arial";
-
-  ctx.fillText(
-    "♛ TOP 10 GANGSTERS",
-    65,
-    245
-  );
-
-  ctx.textAlign = "right";
-  ctx.fillStyle = "#8affaa";
-  ctx.font = "18px Arial";
-
-  ctx.fillText(
-    `TOTAL PLAYERS: ${players.length}`,
-    1460,
-    245
-  );
-
-  ctx.textAlign = "left";
-
-  // FONCTION CARTE ARRONDIE
-  function roundedRect(x, y, w, h, radius) {
-
-    ctx.beginPath();
-
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + w - radius, y);
-
-    ctx.quadraticCurveTo(
-      x + w, y,
-      x + w, y + radius
-    );
-
-    ctx.lineTo(x + w, y + h - radius);
-
-    ctx.quadraticCurveTo(
-      x + w, y + h,
-      x + w - radius, y + h
-    );
-
-    ctx.lineTo(x + radius, y + h);
-
-    ctx.quadraticCurveTo(
-      x, y + h,
-      x, y + h - radius
-    );
-
-    ctx.lineTo(x, y + radius);
-
-    ctx.quadraticCurveTo(
-      x, y,
-      x + radius, y
-    );
-
-    ctx.closePath();
-  }
-
-  // EN-TÊTE DES COLONNES
-  ctx.fillStyle = "#51c975";
-  ctx.font = "bold 14px Arial";
-
-  ctx.fillText("PLAYER", 175, 275);
-  ctx.fillText("RANK", 600, 275);
-  ctx.fillText("EXPERIENCE", 850, 275);
-  ctx.fillText("FORTUNE", 1050, 275);
-  ctx.fillText("REPUTATION", 1270, 275);
-
-  // AFFICHAGE DES JOUEURS
-  const startY = 290;
-  const rowHeight = 54;
-
-  const medals = ["🥇", "🥈", "🥉"];
-
-  for (let i = 0; i < players.length; i++) {
-
-    const p = players[i];
-    const y = startY + i * rowHeight;
-
-    roundedRect(65, y, 1400, 45, 10);
-
-    ctx.fillStyle =
-      i === 0
-        ? "#06351a"
-        : p.id === currentPlayer?.id
-          ? "#073020"
-          : "#031509";
-
-    ctx.fill();
-
-    ctx.strokeStyle =
-      i === 0
-        ? "#00ff55"
-        : "#124d27";
-
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // POSITION
-    ctx.fillStyle = "#00ff55";
-    ctx.font = "bold 21px Arial";
-
-    ctx.fillText(
-      medals[i] || `#${i + 1}`,
-      85,
-      y + 29
-    );
-
-    // NOM
-    ctx.fillStyle =
-      i === 0 ? "#39ff70" : "#d5ffe0";
-
-    ctx.font = "bold 18px Arial";
-
-    let name = p.name || p.id;
-
-    if (name.length > 23) {
-      name = name.substring(0, 20) + "...";
-    }
-
-    ctx.fillText(name, 175, y + 29);
-
-    // RANG
-    ctx.fillStyle = "#7dff9d";
-    ctx.font = "16px Arial";
-
-    ctx.fillText(
-      getRank(p.exp),
-      600,
-      y + 28
-    );
-
-    // EXP
-    ctx.fillStyle = "#00ff55";
-    ctx.font = "bold 17px Arial";
-
-    ctx.fillText(
-      `${p.exp.toLocaleString("fr-FR")} EXP`,
-      850,
-      y + 28
-    );
-
-    // ARGENT
-    ctx.fillText(
-      `${p.cash.toLocaleString("fr-FR")} ${COIN}`,
-      1050,
-      y + 28
-    );
-
-    // RÉPUTATION
-    ctx.fillText(
-      `${p.reputation} REP`,
-      1270,
-      y + 28
-    );
-
-    // JOUEUR ACTUEL
-    if (p.id === currentPlayer?.id) {
-
-      ctx.fillStyle = "#39ff70";
-      ctx.font = "bold 13px Arial";
-
-      ctx.fillText(
-        "YOU",
-        1400,
-        y + 28
-      );
-    }
-  }
-
-  // CARTE PERSONNELLE
-  ctx.strokeStyle = "#1b8b40";
-  ctx.lineWidth = 2;
-
-  ctx.beginPath();
-  ctx.moveTo(65, 850);
-  ctx.lineTo(1465, 850);
-  ctx.stroke();
-
-  ctx.fillStyle = "#00ff55";
-  ctx.font = "bold 20px Arial";
-
-  if (currentPlayer) {
-
-    ctx.fillText(
-      `YOUR GLOBAL RANK: #${currentPlayer.globalRank}`,
-      70,
-      885
-    );
-
-    ctx.textAlign = "right";
-
-    ctx.fillText(
-      `YOUR EXP: ${currentPlayer.exp} | ${getRank(currentPlayer.exp)}`,
-      1450,
-      885
-    );
+    roundedRect(ctx, x, y, 480, 95, 15, "#101a14", "#19ff8c");
 
     ctx.textAlign = "left";
+    ctx.fillStyle = "#19ff8c";
+    ctx.font = "bold 23px Arial";
+    ctx.fillText(stats[i][0], x + 25, y + 35);
 
-  } else {
-
-    ctx.fillText(
-      "YOU ARE NOT REGISTERED",
-      70,
-      885
-    );
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 27px Arial";
+    ctx.fillText(stats[i][1], x + 25, y + 72);
   }
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#19ff8c";
+  ctx.font = "bold 28px Arial";
+  ctx.fillText("𓆩 DARK CITY GANG 𓆪", 600, 1390);
 
   return canvas.toBuffer("image/png");
 }
 
-// =====================================
-// COMMANDE PRINCIPALE
-// =====================================
+async function makeGangRanking(players, currentPlayer) {
+  const canvas = Canvas.createCanvas(1536, 900);
+  const ctx = canvas.getContext("2d");
 
-module.exports = {
+  const gradient = ctx.createLinearGradient(0, 0, 1536, 900);
+  gradient.addColorStop(0, "#070d09");
+  gradient.addColorStop(1, "#14251a");
 
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 1536, 900);
+
+  ctx.strokeStyle = "#19ff8c";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(25, 25, 1486, 850);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#19ff8c";
+  ctx.font = "bold 65px Arial";
+  ctx.fillText("DARK CITY", 768, 100);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 35px Arial";
+  ctx.fillText("GLOBAL GANGSTER RANKING", 768, 155);
+
+  ctx.textAlign = "left";
+  ctx.font = "bold 24px Arial";
+  ctx.fillStyle = "#19ff8c";
+
+  ctx.fillText("RANG", 90, 235);
+  ctx.fillText("JOUEUR", 250, 235);
+  ctx.fillText("NIVEAU", 750, 235);
+  ctx.fillText("EXP", 980, 235);
+  ctx.fillText("FORTUNE", 1190, 235);
+
+  let y = 285;
+
+  for (let i = 0; i < Math.min(players.length, 10); i++) {
+    const player = players[i];
+    const rank = getRank(player.exp || 0);
+
+    roundedRect(
+      ctx,
+      65,
+      y - 35,
+      1400,
+      65,
+      12,
+      i === 0 ? "#173c27" : "#101a14",
+      i === 0 ? "#19ff8c" : "#294333"
+    );
+
+    ctx.fillStyle = "#19ff8c";
+    ctx.font = "bold 27px Arial";
+    ctx.fillText(`#${i + 1}`, 100, y + 5);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 24px Arial";
+    ctx.fillText(String(player.name || "Joueur").slice(0, 25), 250, y + 5);
+
+    ctx.fillStyle = "#b8ffd5";
+    ctx.fillText(rank.name, 750, y + 5);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(String(player.exp || 0), 980, y + 5);
+    ctx.fillText(`${player.cash || 0} ${COIN}`, 1190, y + 5);
+
+    y += 72;
+  }
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#19ff8c";
+  ctx.font = "bold 25px Arial";
+  ctx.fillText(
+    `JOUEURS CLASSÉS : ${players.length}`,
+    768,
+    825
+  );
+
+  return canvas.toBuffer("image/png");
+    }module.exports = {
   config: {
     name: "gang",
     aliases: ["gangster", "darkcity"],
-    version: "2.0.0",
+    version: "2.1.0",
     author: "DARK SYSTEM",
     countDown: 3,
     role: 0,
-    shortDescription: "Jeu de gangster multijoueur",
-    longDescription: "Deviens le gangster le plus puissant de DARK CITY.",
-    category: "GAME",
-
-    guide: {
-      en: "{pn} | profile | work | rob | attack | mission | daily | shop | buy | inventory | top"
-    }
+    description: {
+      fr: "Système RPG gangster DARK CITY",
+      en: "DARK CITY gangster RPG system"
+    },
+    category: "GAME"
   },
 
-  onStart: async function ({
-    api,
-    event,
-    args,
-    message,
-    usersData
-  }) {
-
+  onStart: async function ({ api, event, args, message, usersData }) {
     const uid = event.senderID;
+    const threadID = event.threadID;
+    const action = (args[0] || "help").toLowerCase();
 
-    const user = await usersData.get(uid);
+    const configuredPrefix = global.GoatBot?.config?.prefix;
+    const prefix = Array.isArray(configuredPrefix)
+      ? configuredPrefix[0] || "/"
+      : configuredPrefix || "/";
+
+    let user = await usersData.get(uid);
+
+    if (!user) {
+      user = {
+        money: 0,
+        exp: 0,
+        data: {}
+      };
+    }
+
+    const getGang = data => {
+      if (!data.data) data.data = {};
+
+      if (!data.data.darkCity) {
+        data.data.darkCity = {
+          cash: 1000,
+          exp: 0,
+          reputation: 0,
+          health: 100,
+          energy: 10,
+          inventory: [],
+          weapon: null,
+          armor: null,
+          lastActions: {},
+          lastDaily: 0,
+          lastEnergy: Date.now()
+        };
+      }
+
+      const g = data.data.darkCity;
+
+      g.cash ??= 1000;
+      g.exp ??= 0;
+      g.reputation ??= 0;
+      g.health ??= 100;
+      g.energy ??= 10;
+      g.inventory ??= [];
+      g.weapon ??= null;
+      g.armor ??= null;
+      g.lastActions ??= {};
+      g.lastDaily ??= 0;
+      g.lastEnergy ??= Date.now();
+
+      return g;
+    };
+
     const g = getGang(user);
 
-    const action = (args[0] || "profile").toLowerCase();
-
-    // SAUVEGARDE
     const save = async (id = uid, data = user) => {
-
       await usersData.set(id, {
-        money: data.money,
-        exp: data.exp,
-        data: data.data
+        money: data.money || 0,
+        exp: data.exp || 0,
+        data: data.data || {}
       });
     };
 
-    // RÉCUPÉRER UNE CIBLE
     const getTarget = () => {
-
       if (event.messageReply) {
         return event.messageReply.senderID;
       }
 
-      if (
-        event.mentions &&
-        Object.keys(event.mentions).length
-      ) {
+      if (event.mentions && Object.keys(event.mentions).length > 0) {
         return Object.keys(event.mentions)[0];
       }
 
       return null;
     };
 
-    // UTILISER DE L'ÉNERGIE
-    const useEnergy = async (cost = 1) => {
-
-      if (g.energy < cost) {
-
-        message.reply(
-`⚡ TU ES ÉPUISÉ !
-
-Énergie nécessaire : ${cost}
-Énergie actuelle : ${g.energy}/10
-
-⏳ 1 énergie récupérée toutes les 10 minutes.`
-        );
-
-        return false;
+    const getName = async id => {
+      try {
+        const info = await api.getUserInfo(id);
+        return info[id]?.name || info[id]?.firstName || "Joueur";
+      } catch (error) {
+        return "Joueur";
       }
-
-      g.energy -= cost;
-
-      return true;
     };
 
-    // COOLDOWN
-    const cooldown = (name, duration) => {
-
+    const recoverEnergy = () => {
       const now = Date.now();
-      const last = g.lastActions[name] || 0;
+      const elapsed = now - g.lastEnergy;
+      const recovered = Math.floor(elapsed / 600000);
 
-      if (now - last < duration) {
-
-        message.reply(
-          `⏳ Attends encore ${formatTime(duration - (now - last))} avant de recommencer.`
-        );
-
-        return false;
+      if (recovered > 0) {
+        g.energy = Math.min(10, g.energy + recovered);
+        g.lastEnergy += recovered * 600000;
       }
+    };
 
-      g.lastActions[name] = now;
+    const useEnergy = amount => {
+      recoverEnergy();
 
+      if (g.energy < amount) return false;
+
+      g.energy -= amount;
       return true;
     };
 
-    // =====================================
-    // PROFIL
-    // =====================================
+    const cooldown = (key, duration) => {
+      const now = Date.now();
+      const last = g.lastActions[key] || 0;
+      const remaining = duration - (now - last);
 
-    if (
-      action === "profile" ||
-      action === "profil"
-    ) {
+      if (remaining > 0) {
+        return {
+          success: false,
+          remaining
+        };
+      }
 
-      const name = await usersData.getName(uid);
+      g.lastActions[key] = now;
 
-      const nextRank = RANKS.find(
-        r => r.exp > g.exp
-      );
+      return {
+        success: true
+      };
+    };
 
-      return message.reply(
-`╔═══━━━〔 🩸 DARK CITY 〕━━━═══╗
-          👑 PROFIL GANGSTER
-╚══════════════════════════════╝
+    const getAvatar = async id => {
+      try {
+        const info = await api.getUserInfo(id);
+        return info[id]?.largePictureUrl
+          || info[id]?.profilePictureUrl
+          || info[id]?.avatarUrl
+          || info[id]?.thumbSrc
+          || info[id]?.picture
+          || null;
+      } catch (error) {
+        return null;
+      }
+    };
 
-👤 Nom : ${name || uid}
+    // PROFILE
+    if (action === "profile" || action === "profil") {
+      const name = await getName(uid);
+      const avatar = await getAvatar(uid);
 
-💀 Rang : ${getRank(g.exp)}
-⭐ EXP : ${g.exp}${nextRank ? ` / ${nextRank.exp}` : " (MAX)"}
+      const image = await makeGangProfile(g, name, avatar);
+      const filePath = path.join(DATA_DIR, `profile_${uid}.png`);
 
-💰 Argent : ${g.cash.toLocaleString("fr-FR")} ${COIN}
-🔥 Réputation : ${g.reputation}
+      fs.writeFileSync(filePath, image);
 
-❤️ Santé : ${g.health}/100
-⚡ Énergie : ${g.energy}/10
-
-🔫 Arme : ${getItemName(g.weapon)}
-🛡️ Protection : ${getItemName(g.armor)}
-
-━━━━━━━━━━━━━━━━━━━━
-        🖤 DARK SYSTEM 🖤`
-      );
+      return message.reply({
+        body: `𓆩 🦇 DARK CITY PROFILE 🦇 𓆪\n\nVoici ton profil de gangster.`,
+        attachment: fs.createReadStream(filePath)
+      });
     }
 
-    // =====================================
-    // TRAVAIL
-    // =====================================
+    // WORK
+    if (action === "work" || action === "travail") {
+      const cd = cooldown("work", 30000);
 
-    if (
-      action === "work" ||
-      action === "travail"
-    ) {
+      if (!cd.success) {
+        return message.reply(
+          `⏳ Tu dois attendre ${formatTime(cd.remaining)} avant de retravailler.`
+        );
+      }
 
-      if (!cooldown("work", 30000)) return;
-      if (!await useEnergy(1)) return;
+      if (!useEnergy(1)) {
+        return message.reply("⚡ Tu n'as pas assez d'énergie. Attends sa récupération.");
+      }
 
-      const jobs = [
-        "Tu as livré un colis mystérieux.",
-        "Tu as travaillé pour un commerçant du quartier.",
-        "Tu as effectué une mission de livraison.",
-        "Tu as aidé un contact à organiser son business.",
-        "Tu as récupéré une dette dans le jeu."
-      ];
-
-      const gain = random(150, 450);
+      const reward = random(150, 450);
       const exp = random(10, 25);
       const reputation = random(1, 4);
 
-      g.cash += gain;
+      g.cash += reward;
       g.exp += exp;
       g.reputation += reputation;
 
       await save();
 
       return message.reply(
-`💼 ━━━ TRAVAIL TERMINÉ ━━━
-
-${jobs[random(0, jobs.length - 1)]}
-
-💰 Gain : +${gain} ${COIN}
-⭐ EXP : +${exp}
-🔥 Réputation : +${reputation}
-⚡ Énergie : ${g.energy}/10`
+        `𓆩 🦇 DARK CITY WORK 🦇 𓆪\n\n` +
+        `✅ Travail terminé !\n\n` +
+        `💰 Gain : +${reward} ${COIN}\n` +
+        `⭐ EXP : +${exp}\n` +
+        `🔥 Réputation : +${reputation}\n` +
+        `⚡ Énergie : ${g.energy}/10`
       );
-      }
+    }
 
-      // =====================================
-    // VOLER UN JOUEUR
-    // =====================================
-
-    if (
-      action === "rob" ||
-      action === "vol"
-    ) {
-
+    // ROB
+    if (action === "rob" || action === "vol") {
       const targetID = getTarget();
 
       if (!targetID) {
         return message.reply(
-          "❌ Mentionne un joueur ou réponds à son message.\nExemple : ¥gang rob @joueur"
+          `⚠️ Réponds au message d'un joueur ou mentionne-le.\n\nExemple : ${prefix}gang rob @joueur`
         );
       }
 
       if (targetID === uid) {
+        return message.reply("Tu ne peux pas te voler toi-même.");
+      }
+
+      const targetUser = await usersData.get(targetID);
+
+      if (!targetUser) {
+        return message.reply("❌ Impossible de trouver ce joueur.");
+      }
+
+      const targetGang = getGang(targetUser);
+
+      if (targetGang.cash <= 0) {
+        return message.reply("Ce joueur n'a pas d'argent à voler.");
+      }
+
+      const cd = cooldown("rob", 60000);
+
+      if (!cd.success) {
         return message.reply(
-          "❌ Tu ne peux pas te voler toi-même."
+          `⏳ Attends ${formatTime(cd.remaining)} avant de voler à nouveau.`
         );
       }
 
-      if (g.energy < 2) {
-        return message.reply(
-          "⚡ Tu n'as pas assez d'énergie."
-        );
+      if (!useEnergy(2)) {
+        return message.reply("⚡ Tu n'as pas assez d'énergie.");
       }
 
-      if (!cooldown("rob", 60000)) return;
-      if (!await useEnergy(2)) return;
+      const targetName = await getName(targetID);
 
-      const target = await usersData.get(targetID);
-      const tg = getGang(target);
-
-      if (tg.cash <= 0) {
-        return message.reply(
-          "💸 Ce joueur ne possède pas d'argent à voler."
-        );
-      }
-
-      const success = Math.random() < 0.65;
-
-      if (success) {
-
-        const amount = Math.min(
-          tg.cash,
-          random(100, 500)
+      if (Math.random() < 0.65) {
+        const stolen = Math.min(
+          random(100, 500),
+          targetGang.cash
         );
 
-        tg.cash -= amount;
-        g.cash += amount;
-
+        g.cash += stolen;
+        targetGang.cash -= stolen;
         g.exp += 20;
         g.reputation += 5;
 
-        await save();
-        await save(targetID, target);
+        await save(uid, user);
+        await save(targetID, targetUser);
 
         return message.reply(
-`🩸 ━━━ VOL RÉUSSI ━━━
-
-💀 Tu as réussi à voler ton adversaire !
-
-💰 Argent récupéré : +${amount} ${COIN}
-⭐ EXP : +20
-🔥 Réputation : +5
-
-⚡ Énergie : ${g.energy}/10
-
-🖤 DARK CITY`
-        );
-
-      } else {
-
-        const penalty = Math.min(
-          g.cash,
-          random(50, 200)
-        );
-
-        g.cash -= penalty;
-        g.health = Math.max(
-          1,
-          g.health - 10
-        );
-
-        await save();
-
-        return message.reply(
-`🚨 ━━━ VOL ÉCHOUÉ ━━━
-
-Tu as été repéré pendant ton opération !
-
-💸 Amende : -${penalty} ${COIN}
-❤️ Santé : -10
-
-💀 Tu dois être plus discret la prochaine fois.`
+          `𓆩 🦇 BRAQUAGE RÉUSSI 🦇 𓆪\n\n` +
+          `🎯 Victime : ${targetName}\n` +
+          `💰 Argent volé : ${stolen} ${COIN}\n` +
+          `⭐ EXP : +20\n` +
+          `🔥 Réputation : +5`
         );
       }
+
+      const fine = random(50, 200);
+      g.cash = Math.max(0, g.cash - fine);
+      g.health = Math.max(0, g.health - 10);
+
+      await save();
+
+      return message.reply(
+        `𓆩 🚨 BRAQUAGE RATÉ 🚨 𓆪\n\n` +
+        `La police t'a repéré !\n` +
+        `💸 Amende : -${fine} ${COIN}\n` +
+        `❤️ Santé : -10`
+      );
     }
 
-    // =====================================
-    // ATTAQUER UN JOUEUR
-    // =====================================
-
-    if (
-      action === "attack" ||
-      action === "attaquer"
-    ) {
-
+    // ATTACK
+    if (action === "attack" || action === "attaquer") {
       const targetID = getTarget();
 
       if (!targetID) {
         return message.reply(
-          "❌ Mentionne un joueur pour l'attaquer."
+          `⚠️ Réponds au message d'un joueur ou mentionne-le.\n\nExemple : ${prefix}gang attack @joueur`
         );
       }
 
       if (targetID === uid) {
-        return message.reply(
-          "❌ Tu ne peux pas te battre contre toi-même."
-        );
+        return message.reply("Tu ne peux pas t'attaquer toi-même.");
+      }
+
+      const targetUser = await usersData.get(targetID);
+
+      if (!targetUser) {
+        return message.reply("❌ Joueur introuvable.");
+      }
+
+      const targetGang = getGang(targetUser);
+
+      if (targetGang.health <= 0) {
+        return message.reply("Ce joueur est déjà K.O.");
       }
 
       if (g.health <= 0) {
+        return message.reply("Tu es K.O. ! Utilise la commande heal.");
+      }
+
+      const cd = cooldown("attack", 60000);
+
+      if (!cd.success) {
         return message.reply(
-          "☠️ Tu es K.O. ! Utilise ¥gang heal pour récupérer ta santé."
+          `⏳ Attends ${formatTime(cd.remaining)} avant de combattre à nouveau.`
         );
       }
 
-      if (g.energy < 2) {
-        return message.reply(
-          "⚡ Tu n'as pas assez d'énergie."
-        );
+      if (!useEnergy(2)) {
+        return message.reply("⚡ Tu n'as pas assez d'énergie.");
       }
 
-      if (!cooldown("attack", 60000)) return;
-      if (!await useEnergy(2)) return;
+      const weaponAttack = g.weapon
+        ? SHOP[g.weapon]?.attack || 0
+        : 0;
 
-      const target = await usersData.get(targetID);
-      const tg = getGang(target);
-
-      if (tg.health <= 0) {
-        return message.reply(
-          "💀 Ce joueur est déjà K.O."
-        );
-      }
-
-      const weapon = SHOP[g.weapon];
-      const armor = SHOP[tg.armor];
-
-      const attackPower =
-        random(10, 20) +
-        (weapon?.attack || 0);
-
-      const defense = armor?.defense || 0;
+      const targetDefense = targetGang.armor
+        ? SHOP[targetGang.armor]?.defense || 0
+        : 0;
 
       const damage = Math.max(
         1,
-        attackPower - Math.floor(defense / 3)
+        random(15, 30) + weaponAttack - targetDefense
       );
 
-      tg.health = Math.max(
+      targetGang.health = Math.max(
         0,
-        tg.health - damage
+        targetGang.health - damage
       );
 
       g.exp += 25;
       g.reputation += 5;
 
-      await save();
-      await save(targetID, target);
+      await save(uid, user);
+      await save(targetID, targetUser);
+
+      const targetName = await getName(targetID);
 
       return message.reply(
-`⚔️ ━━━ COMBAT DARK CITY ━━━
-
-💀 Tu as attaqué ton adversaire !
-
-🔫 Arme : ${getItemName(g.weapon)}
-🛡️ Défense adverse : ${defense}
-
-❤️ Dégâts infligés : ${damage}
-
-❤️ Santé restante de l'adversaire :
-${tg.health}/100
-
-⭐ EXP : +25
-🔥 Réputation : +5
-
-${tg.health <= 0
-  ? "☠️ TON ADVERSAIRE EST K.O. !"
-  : "🩸 Le combat continue..."}
-
-🖤 DARK SYSTEM`
+        `𓆩 ⚔️ DARK CITY FIGHT ⚔️ 𓆪\n\n` +
+        `🥊 Adversaire : ${targetName}\n` +
+        `💥 Dégâts infligés : ${damage}\n` +
+        `❤️ Santé restante de l'adversaire : ${targetGang.health}/100\n` +
+        `⭐ EXP : +25\n` +
+        `🔥 Réputation : +5\n\n` +
+        (targetGang.health <= 0
+          ? "☠️ Ton adversaire est K.O. !"
+          : "⚔️ Le combat continue...")
       );
     }
 
-    // =====================================
-    // SOINS
-    // =====================================
-
-    if (
-      action === "heal" ||
-      action === "soin"
-    ) {
-
+    // HEAL
+    if (action === "heal" || action === "soin") {
       if (g.health >= 100) {
-        return message.reply(
-          "❤️ Ta santé est déjà au maximum."
-        );
+        return message.reply("❤️ Ta santé est déjà au maximum.");
       }
 
       const price = 300;
 
       if (g.cash < price) {
         return message.reply(
-`💸 Tu n'as pas assez d'argent !
-
-Prix des soins : ${price} ${COIN}
-Ton argent : ${g.cash} ${COIN}`
+          `❌ Il te faut ${price} ${COIN} pour acheter un soin.`
         );
       }
 
-      const recovered = Math.min(
-        30,
-        100 - g.health
-      );
+      const restored = Math.min(30, 100 - g.health);
 
       g.cash -= price;
-      g.health += recovered;
+      g.health += restored;
 
       await save();
 
       return message.reply(
-`🏥 ━━━ SOINS TERMINÉS ━━━
-
-❤️ Santé récupérée : +${recovered}
-❤️ Santé actuelle : ${g.health}/100
-
-💰 Coût : ${price} ${COIN}
-💵 Argent restant : ${g.cash} ${COIN}
-
-🖤 DARK CITY`
+        `𓆩 ❤️ SOINS DARK CITY ❤️ 𓆪\n\n` +
+        `✅ Tu as récupéré ${restored} points de santé.\n` +
+        `❤️ Santé : ${g.health}/100\n` +
+        `💸 Prix : ${price} ${COIN}`
       );
     }
 
-    // =====================================
-    // MISSIONS
-    // =====================================
+    // MISSION
+    if (action === "mission" || action === "missions") {
+      const cd = cooldown("mission", 120000);
 
-    if (
-      action === "mission" ||
-      action === "missions"
-    ) {
+      if (!cd.success) {
+        return message.reply(
+          `⏳ Attends ${formatTime(cd.remaining)} avant ta prochaine mission.`
+        );
+      }
 
-      if (!cooldown("mission", 120000)) return;
-      if (!await useEnergy(2)) return;
+      if (!useEnergy(2)) {
+        return message.reply("⚡ Tu n'as pas assez d'énergie.");
+      }
 
-      const mission = MISSIONS[
-        random(0, MISSIONS.length - 1)
-      ];
-
-      const reward = random(
-        mission.min,
-        mission.max
-      );
-
-      const reputation = random(3, 8);
+      const mission = MISSIONS[random(0, MISSIONS.length - 1)];
+      const reward = random(mission.min, mission.max);
 
       g.cash += reward;
       g.exp += mission.exp;
-      g.reputation += reputation;
+      g.reputation += 3;
 
       await save();
 
       return message.reply(
-`🎯 ━━━ MISSION TERMINÉE ━━━
-
-📌 Mission : ${mission.name}
-
-${mission.description}
-
-━━━━━━━━━━━━━━━━━━━━
-
-💰 Récompense : +${reward} ${COIN}
-⭐ EXP : +${mission.exp}
-🔥 Réputation : +${reputation}
-
-⚡ Énergie : ${g.energy}/10
-
-🖤 DARK CITY`
+        `𓆩 🎯 MISSION ACCOMPLIE 🎯 𓆪\n\n` +
+        `📌 Mission : ${mission.name}\n` +
+        `💰 Récompense : +${reward} ${COIN}\n` +
+        `⭐ EXP : +${mission.exp}\n` +
+        `🔥 Réputation : +3\n` +
+        `⚡ Énergie : ${g.energy}/10`
       );
     }
 
-    // =====================================
-    // RÉCOMPENSE QUOTIDIENNE
-    // =====================================
-
-    if (
-      action === "daily" ||
-      action === "quotidien"
-    ) {
-
+    // DAILY
+    if (action === "daily" || action === "quotidien") {
       const now = Date.now();
-      const cooldownTime = 86400000;
+      const remaining = 86400000 - (now - g.lastDaily);
 
-      if (
-        now - g.lastDaily < cooldownTime
-      ) {
-
+      if (remaining > 0) {
         return message.reply(
-`⏳ TU AS DÉJÀ RÉCUPÉRÉ TA RÉCOMPENSE !
-
-Reviens dans :
-
-${formatTime(
-  cooldownTime - (now - g.lastDaily)
-)}
-
-🎁 Prochaine récompense disponible bientôt.`
+          `⏳ Tu as déjà récupéré ta récompense quotidienne.\nReviens dans ${formatTime(remaining)}.`
         );
       }
 
@@ -1015,202 +765,149 @@ ${formatTime(
       await save();
 
       return message.reply(
-`🎁 ━━━ DAILY REWARD ━━━
-
-💰 Argent : +${reward} ${COIN}
-⭐ EXP : +${exp}
-🔥 Réputation : +10
-
-━━━━━━━━━━━━━━━━━━━━
-
-Reviens demain pour une nouvelle récompense !
-
-🖤 DARK SYSTEM`
+        `𓆩 🎁 DAILY REWARD 🎁 𓆪\n\n` +
+        `💰 Récompense : +${reward} ${COIN}\n` +
+        `⭐ EXP : +${exp}\n` +
+        `🔥 Réputation : +10\n\n` +
+        `Reviens demain pour ta prochaine récompense !`
       );
-    }
+  }    // SHOP
+    if (action === "shop" || action === "boutique") {
+      let text = `𓆩 🛒 DARK CITY SHOP 🛒 𓆪\n\n`;
+      text += `💰 Ton argent : ${g.cash} ${COIN}\n\n`;
 
-    // =====================================
-    // BOUTIQUE
-    // =====================================
-
-    if (
-      action === "shop" ||
-      action === "boutique"
-    ) {
-
-      let text = `╔═══━━〔 🛒 DARK SHOP 〕━━═══╗
-
-💰 Ton argent : ${g.cash.toLocaleString("fr-FR")} ${COIN}
-
-━━━━━━━━━━━━━━━━━━━━
-
-`;
-
-      for (const [key, item] of Object.entries(SHOP)) {
-
+      for (const [id, item] of Object.entries(SHOP)) {
         text +=
-`${item.name}
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `📦 ${item.name}\n` +
+          `🆔 ID : ${id}\n` +
+          `💵 Prix : ${item.price} ${COIN}\n`;
 
-🆔 ID : ${key}
-💰 Prix : ${item.price} ${COIN}
-${item.attack ? `⚔️ Attaque : +${item.attack}` : ""}
-${item.defense ? `🛡️ Défense : +${item.defense}` : ""}
+        if (item.type === "weapon") {
+          text += `⚔️ Attaque : +${item.attack}\n`;
+        } else {
+          text += `🛡️ Défense : +${item.defense}\n`;
+        }
 
-━━━━━━━━━━━━━━━━━━━━
-
-`;
+        text += "\n";
       }
 
       text +=
-`Pour acheter :
-¥gang buy knife
-
-🖤 DARK SYSTEM`;
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `🛍️ Pour acheter : ${prefix}gang buy <ID>\n` +
+        `Exemple : ${prefix}gang buy pistol`;
 
       return message.reply(text);
     }
 
-    // =====================================
-    // ACHETER UN OBJET
-    // =====================================
-
-    if (
-      action === "buy" ||
-      action === "acheter"
-    ) {
-
-      const itemID = args[1]?.toLowerCase();
-
-      if (!itemID || !SHOP[itemID]) {
-        return message.reply(
-          "❌ Objet invalide.\nUtilise ¥gang shop pour voir les objets disponibles."
-        );
-      }
-
+    // BUY
+    if (action === "buy" || action === "acheter") {
+      const itemID = (args[1] || "").toLowerCase();
       const item = SHOP[itemID];
 
-      if (g.cash < item.price) {
+      if (!item) {
         return message.reply(
-`💸 ARGENT INSUFFISANT !
-
-Objet : ${item.name}
-Prix : ${item.price} ${COIN}
-Ton argent : ${g.cash} ${COIN}`
+          `❌ Objet introuvable !\n\n` +
+          `Consulte la boutique avec : ${prefix}gang shop`
         );
       }
 
       if (g.inventory.includes(itemID)) {
+        return message.reply("⚠️ Tu possèdes déjà cet objet.");
+      }
+
+      if (g.cash < item.price) {
         return message.reply(
-          "❌ Tu possèdes déjà cet objet."
+          `❌ Tu n'as pas assez d'argent.\n` +
+          `💰 Prix : ${item.price} ${COIN}\n` +
+          `💵 Ton argent : ${g.cash} ${COIN}`
         );
       }
 
       g.cash -= item.price;
       g.inventory.push(itemID);
 
-      // ÉQUIPEMENT AUTOMATIQUE
-      if (item.attack) {
+      let equipped = false;
 
-        const current = SHOP[g.weapon];
+      if (item.type === "weapon") {
+        const currentAttack = g.weapon
+          ? SHOP[g.weapon]?.attack || 0
+          : 0;
 
-        if (
-          !current ||
-          item.attack > (current.attack || 0)
-        ) {
+        if (item.attack > currentAttack) {
           g.weapon = itemID;
+          equipped = true;
         }
       }
 
-      if (item.defense) {
+      if (item.type === "armor") {
+        const currentDefense = g.armor
+          ? SHOP[g.armor]?.defense || 0
+          : 0;
 
-        const current = SHOP[g.armor];
-
-        if (
-          !current ||
-          item.defense > (current.defense || 0)
-        ) {
+        if (item.defense > currentDefense) {
           g.armor = itemID;
+          equipped = true;
         }
       }
 
       await save();
 
       return message.reply(
-`🛒 ━━━ ACHAT RÉUSSI ━━━
-
-📦 Objet : ${item.name}
-💰 Prix : -${item.price} ${COIN}
-
-${item.attack ? `⚔️ Attaque : +${item.attack}` : ""}
-${item.defense ? `🛡️ Défense : +${item.defense}` : ""}
-
-━━━━━━━━━━━━━━━━━━━━
-
-💰 Argent restant : ${g.cash} ${COIN}
-
-🖤 DARK SYSTEM`
+        `𓆩 🛍️ ACHAT RÉUSSI 🛍️ 𓆪\n\n` +
+        `✅ Objet acheté : ${item.name}\n` +
+        `💸 Prix : ${item.price} ${COIN}\n` +
+        `💰 Argent restant : ${g.cash} ${COIN}\n\n` +
+        (equipped
+          ? "🟢 L'objet a été automatiquement équipé."
+          : "📦 L'objet a été ajouté à ton inventaire.")
       );
     }
 
-    // =====================================
-    // INVENTAIRE
-    // =====================================
+    // INVENTORY
+    if (action === "inventory" || action === "inventaire") {
+      let text = `𓆩 🎒 DARK CITY INVENTORY 🎒 𓆪\n\n`;
 
-    if (
-      action === "inventory" ||
-      action === "inventaire" ||
-      action === "inv"
-    ) {
+      text += `💰 Argent : ${g.cash} ${COIN}\n`;
+      text += `⚔️ Arme équipée : ${
+        g.weapon ? getItemName(g.weapon) : "Aucune"
+      }\n`;
 
-      let items = "";
+      text += `🛡️ Protection équipée : ${
+        g.armor ? getItemName(g.armor) : "Aucune"
+      }\n\n`;
+
+      text += `📦 OBJETS POSSÉDÉS\n\n`;
 
       if (g.inventory.length === 0) {
-
-        items = "Ton inventaire est vide.";
-
+        text += "Ton inventaire est vide.\n";
       } else {
+        for (const itemID of g.inventory) {
+          const item = SHOP[itemID];
 
-        for (const id of g.inventory) {
+          if (!item) continue;
 
-          const item = SHOP[id];
+          const equipped =
+            g.weapon === itemID || g.armor === itemID;
 
-          if (item) {
-
-            const equipped =
-              g.weapon === id ||
-              g.armor === id;
-
-            items +=
-              `${item.name} ${equipped ? "✅ ÉQUIPÉ" : ""}\n`;
-          }
+          text +=
+            `• ${item.name}` +
+            (equipped ? " 🟢 ÉQUIPÉ" : "") +
+            "\n";
         }
       }
 
-      return message.reply(
-`╔═══━━〔 🎒 INVENTAIRE 〕━━═══╗
+      text += `\n🛒 Boutique : ${prefix}gang shop`;
 
-${items}
-
-━━━━━━━━━━━━━━━━━━━━
-
-🔫 Arme : ${getItemName(g.weapon)}
-🛡️ Protection : ${getItemName(g.armor)}
-
-💰 Argent : ${g.cash} ${COIN}
-
-🖤 DARK SYSTEM`
-      );
+      return message.reply(text);
     }
 
-    // =====================================
-    // CLASSEMENT GRAPHIQUE
-    // =====================================
-
+    // TOP / RANKING
     if (
       action === "top" ||
+      action === "ranking" ||
       action === "classement"
     ) {
-
       if (typeof usersData.getAll !== "function") {
         return message.reply(
           "❌ La méthode usersData.getAll() n'est pas disponible."
@@ -1218,8 +915,6 @@ ${items}
       }
 
       try {
-
-        // Récupérer tous les joueurs
         const allUsers = await usersData.getAll();
 
         const entries = Array.isArray(allUsers)
@@ -1228,133 +923,86 @@ ${items}
 
         const players = [];
 
-        for (const [id, u] of entries) {
+        for (const [id, data] of entries) {
+          if (!id || !data) continue;
 
-          if (!id || !u?.data?.darkCity) continue;
-
-          const data = u.data.darkCity;
+          const gang = getGang(data);
 
           players.push({
-            id: String(id),
-            name: await usersData.getName(id),
-            cash: Number(data.cash) || 0,
-            exp: Number(data.exp) || 0,
-            reputation: Number(data.reputation) || 0
+            id,
+            name: await getName(id),
+            cash: gang.cash || 0,
+            exp: gang.exp || 0,
+            reputation: gang.reputation || 0
           });
         }
 
-        // Ajouter le joueur actuel s'il n'est pas encore enregistré
-        if (!players.some(p => p.id === String(uid))) {
+        players.sort((a, b) => b.exp - a.exp);
 
-          players.push({
-            id: String(uid),
-            name: await usersData.getName(uid),
-            cash: g.cash,
-            exp: g.exp,
-            reputation: g.reputation
-          });
-        }
+        const image = await makeGangRanking(players, uid);
+        const filePath = path.join(DATA_DIR, "ranking.png");
 
-        // Classement global par EXP
-        players.sort((a, b) => {
-          return b.exp - a.exp;
-        });
+        fs.writeFileSync(filePath, image);
 
-        // Attribuer les véritables rangs
-        players.forEach((p, index) => {
-          p.globalRank = index + 1;
-        });
-
-        // Trouver le joueur actuel
-        const currentPlayer = players.find(
-          p => p.id === String(uid)
-        );
-
-        // Afficher uniquement les 10 premiers
-        const top = players.slice(0, 10);
-
-        // Générer la carte PNG
-        const image = await makeGangRanking(
-          top,
-          currentPlayer
-        );
+        const myRank = players.findIndex(p => p.id === uid) + 1;
 
         return message.reply({
           body:
-`╔═══━━〔 🩸 DARK CITY RANKING 〕━━═══╗
-
-🏆 Voici les 10 gangsters les plus puissants de la ville.
-
-👑 Ton classement global : #${currentPlayer.globalRank}
-
-⭐ Ton EXP : ${currentPlayer.exp}
-
-🖤 DARK SYSTEM`,
-          attachment: image
+            `𓆩 🏆 DARK CITY RANKING 🏆 𓆪\n\n` +
+            `👥 Joueurs classés : ${players.length}\n` +
+            `👑 Ton classement : ${
+              myRank > 0 ? `#${myRank}` : "Non classé"
+            }\n\n` +
+            `Voici le TOP 10 des gangsters les plus puissants.`,
+          attachment: fs.createReadStream(filePath)
         });
-
-      } catch (err) {
-
-        console.error(
-          "[DARK CITY RANKING ERROR]",
-          err
-        );
+      } catch (error) {
+        console.error("DARK CITY RANKING ERROR:", error);
 
         return message.reply(
-          "❌ Une erreur est survenue pendant la génération du classement."
+          "❌ Une erreur est survenue pendant la création du classement."
         );
       }
     }
 
-    // =====================================
-    // COMMANDES D'AIDE
-    // =====================================
+    // HELP / MENU
+    const help =
+      `━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `𓆩 🦇 𝐃𝐀𝐑𝐊 𝐂𝐈𝐓𝐘 🦇 𓆪\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
 
-    return message.reply(
-`╔═══━━〔 🩸 DARK CITY 〕━━═══╗
-             COMMANDES
-╚══════════════════════════════╝
+      `👤 PROFIL\n` +
+      `┊ ${prefix}gang profile\n\n` +
 
-👑 PROFIL
-¥gang profile
+      `💰 ARGENT\n` +
+      `┊ ${prefix}gang work\n` +
+      `┊ ${prefix}gang daily\n` +
+      `┊ ${prefix}gang rob @joueur\n\n` +
 
-💼 TRAVAIL
-¥gang work
+      `⚔️ COMBAT\n` +
+      `┊ ${prefix}gang attack @joueur\n` +
+      `┊ ${prefix}gang heal\n\n` +
 
-💀 VOLER UN JOUEUR
-¥gang rob @joueur
+      `🎯 MISSIONS\n` +
+      `┊ ${prefix}gang mission\n\n` +
 
-⚔️ ATTAQUER UN JOUEUR
-¥gang attack @joueur
+      `🛒 BOUTIQUE\n` +
+      `┊ ${prefix}gang shop\n` +
+      `┊ ${prefix}gang buy <ID>\n` +
+      `┊ ${prefix}gang inventory\n\n` +
 
-🏥 RÉCUPÉRER SA SANTÉ
-¥gang heal
+      `🏆 CLASSEMENT\n` +
+      `┊ ${prefix}gang top\n\n` +
 
-🎯 MISSION
-¥gang mission
+      `━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💰 Mon argent : ${g.cash} ${COIN}\n` +
+      `⭐ Mon EXP : ${g.exp}\n` +
+      `👑 Mon rang : ${getRank(g.exp).name}\n` +
+      `❤️ Ma santé : ${g.health}/100\n` +
+      `⚡ Mon énergie : ${g.energy}/10\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `𓆩 DARK CITY GANG 𓆪`;
 
-🎁 RÉCOMPENSE QUOTIDIENNE
-¥gang daily
-
-🛒 BOUTIQUE
-¥gang shop
-
-📦 ACHETER UN OBJET
-¥gang buy knife
-
-🎒 INVENTAIRE
-¥gang inventory
-
-🏆 CLASSEMENT GRAPHIQUE
-¥gang top
-
-━━━━━━━━━━━━━━━━━━━━
-
-⚡ RÉCUPÉRATION D'ÉNERGIE
-1 énergie toutes les 10 minutes.
-
-🖤 BIENVENUE DANS DARK CITY.
-`
-    );
+    return message.reply(help);
   }
 };
