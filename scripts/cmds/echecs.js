@@ -1,6 +1,11 @@
+
 const { Readable } = require("stream");
 const { Chess } = require("chess.js");
-const { createChessCard } = require("../func/chessCard");
+
+const {
+  createChessCard,
+  createEloCard
+} = require("../func/chessCard");
 
 const GAMES = new Map();
 const INVITES = new Map();
@@ -196,7 +201,7 @@ ${game.chess.turn() === "w"
 ✦ Exemple : e2e4
 ✦ Promotion : e7e8q
 ✦ Commande : _echecs stop pour abandonner.`,
-    attachment: Readable.from(image)
+    attachment: Readable.from([image])
   });
 
   if (sent?.messageID) {
@@ -305,14 +310,14 @@ module.exports = {
   config: {
     name: "echecs",
     aliases: ["chess", "échecs"],
-    version: "1.0.0",
+    version: "1.1.0",
     author: "KEN AI",
     countDown: 5,
     role: 0,
     shortDescription: "Jouer aux échecs",
     longDescription:
       "Échecs contre KEN AI ou un autre joueur avec classement ELO.",
-    category: "games",
+    category: "game",
     guide:
       "{pn} bot [facile|normal|hard] | {pn} @joueur | {pn} elo | {pn} stop"
   },
@@ -345,16 +350,14 @@ module.exports = {
 
     if (action === "elo") {
       const stats = await getStats(usersData, userID);
+      const name = await usersData.getName(userID);
 
-      return message.reply(
-`♛ 𝑬𝑳𝑶 — 𝑬𝑪𝑯𝑬𝑪𝑺 𝑹𝑶𝒀𝑨𝑳 ♛
+      const image = await createEloCard(stats, { name });
 
-👑 Classement : ${stats.elo}
-🏆 Victoires : ${stats.wins}
-💔 Défaites : ${stats.losses}
-🤝 Matchs nuls : ${stats.draws}
-♟️ Parties jouées : ${stats.games}`
-      );
+      return message.reply({
+        body: "♛ 𝐄𝐂𝐇𝐄𝐂𝐒 𝐑𝐎𝐘𝐀𝐋 — 𝐒𝐓𝐀𝐓𝐈𝐒𝐓𝐈𝐐𝐔𝐄𝐒 ♛",
+        attachment: Readable.from([image])
+      });
     }
 
     if (currentGame) {
@@ -573,3 +576,4 @@ e7e8q (q = dame, r = tour, b = fou, n = cavalier).`
     }
   }
 };
+  
